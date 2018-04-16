@@ -1,4 +1,5 @@
 use graph::Graph;
+use graph::transfos;
 
 pub fn plural(i: usize) -> String {
     if i != 1 {
@@ -42,4 +43,32 @@ where
 
 pub fn trash_node(_: &Graph) -> Result<String, ()> {
     Ok("TRASH".to_string())
+}
+
+pub enum Transfo {
+    ROTATION,
+    ADD_EDGE,
+    REMOVE_EDGE,
+}
+
+impl Transfo {
+    pub fn new(s: String) -> Transfo {
+        //TODO use regexes
+        let s = s.trim().to_lowercase().replace("-", "").replace("_", "");
+        match s.as_str() {
+            "rotation" => Transfo::ROTATION,
+            "addedge" => Transfo::ADD_EDGE,
+            "removeedge" => Transfo::REMOVE_EDGE,
+            _ => panic!(format!("Unknown transformation : \"{}\"", s)),
+        }
+    }
+
+    pub fn apply(&self, g: &Graph) -> Vec<Graph> {
+        match self {
+            ROTATION => transfos::rotation(&g),
+            ADD_EDGE => transfos::add_edge(&g),
+            REMOVE_EDGE => transfos::remove_edge(&g),
+            _ => vec![],
+        }
+    }
 }

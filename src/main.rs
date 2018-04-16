@@ -52,15 +52,6 @@ struct Args {
     flag_f: Vec<String>,
 }
 
-fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
-    match s.as_str() {
-        "rotation" => Ok(Box::new(move |ref x| transfos::rotation(&x))),
-        "add_edge" => Ok(Box::new(move |ref x| transfos::add_edge(&x))),
-        "remove_edge" => Ok(Box::new(move |ref x| transfos::remove_edge(&x))),
-        _ => Err(format!("Transformation '{}' not defined.", s)),
-    }
-}
-
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
@@ -70,6 +61,10 @@ fn main() {
     let outfilename = args.flag_o;
     let batch = args.flag_b;
     let buffer = args.flag_s;
+    let trse: Vec<utils::Transfo> = args.flag_f
+        .iter()
+        .map(|x| utils::Transfo::new(x.to_string()))
+        .collect();
     //let mut trsf = get_transfo(&args.flag_t[0]).unwrap_or_else(|x| panic!(x));
     //for t in args.flag_t.iter().skip(1) {
     //trsf = combine_transfos(*trsf, *get_transfo(t).unwrap_or_else(|x| panic!(x)));
