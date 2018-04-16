@@ -2,12 +2,11 @@
 name = "transrust"
 version = "0.1.0"
 authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
-build = "build.rs"
 
 [dependencies]
 
 rayon = "1.0"
-graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
+graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git", branch="compile"}
 time = "0.1"
 docopt = "0.8"
 serde="1.0"
