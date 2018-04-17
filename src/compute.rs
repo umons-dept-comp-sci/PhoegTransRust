@@ -17,17 +17,18 @@ where
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos<F>(g: &Graph, trs: Arc<F>) -> Vec<Graph>
-where
-    F: Fn(&Graph) -> Vec<Graph>,
-{
-    trs(&g).iter().map(|x| canon_graph(x).0).collect()
+pub fn apply_transfos(g: &Graph, trs: &Vec<Transfo>) -> Vec<Graph> {
+    //TODO iterators ?
+    let mut r = vec![];
+    for t in trs {
+        r.extend(t.apply(&g));
+    }
+    r.iter().map(|x| canon_graph(x).0).collect()
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
-pub fn handle_graph<F, T>(g: Graph, t: &mut Sender<String>, trsf: Arc<F>, ftrs: Arc<T>)
+pub fn handle_graph<T>(g: Graph, t: &mut Sender<String>, trsf: &Vec<Transfo>, ftrs: Arc<T>)
 where
-    F: Fn(&Graph) -> Vec<Graph>,
     T: Fn(&Graph) -> Result<String, ()>,
 {
     let r = apply_transfos(&g, trsf);
@@ -40,13 +41,12 @@ where
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
-pub fn handle_graphs<F, T>(v: Vec<Graph>, t: Sender<String>, trsf: Arc<F>, ftrs: Arc<T>)
+pub fn handle_graphs<T>(v: Vec<Graph>, t: Sender<String>, trsf: &Vec<Transfo>, ftrs: Arc<T>)
 where
-    F: Fn(&Graph) -> Vec<Graph> + Send + Sync,
     T: Fn(&Graph) -> Result<String, ()> + Send + Sync,
 {
     v.into_par_iter()
-        .for_each_with(t, |s, x| handle_graph(x, s, trsf.clone(), ftrs.clone()));
+        .for_each_with(t, |s, x| handle_graph(x, s, trsf, ftrs.clone()));
 }
 
 /// Read files of graphs

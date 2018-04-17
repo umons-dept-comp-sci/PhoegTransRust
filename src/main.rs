@@ -61,7 +61,7 @@ fn main() {
     let outfilename = args.flag_o;
     let batch = args.flag_b;
     let buffer = args.flag_s;
-    let trse: Vec<utils::Transfo> = args.flag_f
+    let trse: Vec<utils::Transfo> = args.flag_t
         .iter()
         .map(|x| utils::Transfo::new(x.to_string()))
         .collect();
@@ -97,7 +97,7 @@ fn main() {
         total += s;
         if s > 0 {
             eprintln!("Loaded a batch of size {}", s);
-            handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
+            handle_graphs(v, sender.clone(), &trse, ftrs.clone());
             eprintln!("Finished a batch of size {} ({} so far)", s, total);
         }
     }

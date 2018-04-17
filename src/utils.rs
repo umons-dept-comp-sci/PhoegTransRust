@@ -45,6 +45,7 @@ pub fn trash_node(_: &Graph) -> Result<String, ()> {
     Ok("TRASH".to_string())
 }
 
+//TODO use macros ?
 pub enum Transfo {
     ROTATION,
     ADD_EDGE,
