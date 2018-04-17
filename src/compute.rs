@@ -1,6 +1,6 @@
 use graph::Graph;
 use graph::format::from_g6;
-use graph::nauty::canon_graph;
+use graph::nauty::{canon_graph, orbits};
 use std::fs::File;
 use std::io::{stdout, BufRead, BufWriter, Write};
 use rayon::prelude::*;
@@ -74,6 +74,99 @@ where
     t
 }
 
+pub fn remove_add<I, V, C>(g: &Graph, k: usize, inv: &I, class: &C) -> Vec<(Graph, V)>
+where
+    I: Fn(&Graph) -> V,
+    C: Fn(&Graph) -> bool,
+    V: PartialOrd + Copy + ::std::fmt::Display,
+{
+    let mut res = vec![(g.clone(), Graph::new(g.order()))];
+    //First, we remove k edges
+    for _ in 0..k {
+        res = res.iter()
+            .flat_map(|&(ref g, ref v)| remove_edge_pair(&g, &v))
+            .collect();
+    }
+    res.iter()
+        .map(|&(ref g, ref v)| descent_add(&g, &v, &inv, class))
+        .collect()
+}
+
+fn descent_add<I, V, C>(g: &Graph, v: &Graph, inv: &I, class: C) -> (Graph, V)
+where
+    I: Fn(&Graph) -> V,
+    C: Fn(&Graph) -> bool,
+    V: PartialOrd + Copy + ::std::fmt::Display,
+{
+    let mut res = add_edge_const(&g, &v);
+    let mut stop = false;
+    let mut pcand = g.clone();
+    let mut pcval = inv(&pcand);
+    if res.len() > 0 {
+        pcand = res.iter()
+            .max_by(|x, y| inv(x).partial_cmp(&inv(y)).unwrap())
+            .unwrap()
+            .clone();
+        pcval = inv(&pcand);
+        res = add_edge_const(&pcand, &v);
+        let mut cand;
+        let mut cval;
+        while res.len() > 0 && !stop {
+            cand = res.iter()
+                .max_by(|x, y| inv(x).partial_cmp(&inv(y)).unwrap())
+                .unwrap()
+                .clone();
+            cval = inv(&cand);
+            if pcval > cval && class(&pcand) {
+                stop = true;
+            } else {
+                pcand = cand.clone();
+                pcval = cval;
+                res = add_edge_const(&cand, &v);
+            }
+        }
+    }
+    (pcand, pcval)
+}
+
+pub fn remove_edge_pair(g: &Graph, v: &Graph) -> Vec<(Graph, Graph)> {
+    let mut res = vec![];
+    let mut fixed = Vec::with_capacity(1);
+    for i in orbits(&g, &fixed) {
+        fixed.push(i as u32);
+        for &j in orbits(&g, &fixed)
+            .iter()
+            .filter(|&x| *x > i && g.is_edge(*x, i))
+        {
+            let mut ng = g.clone();
+            let mut nv = v.clone();
+            ng.remove_edge(i, j);
+            nv.add_edge(i, j);
+            res.push((ng, nv));
+        }
+        fixed.pop();
+    }
+    res
+}
+
+pub fn add_edge_const(g: &Graph, v: &Graph) -> Vec<Graph> {
+    let mut res = vec![];
+    let mut fixed = Vec::with_capacity(1);
+    for i in orbits(&g, &fixed) {
+        fixed.push(i as u32);
+        for &j in orbits(&g, &fixed)
+            .iter()
+            .filter(|&x| *x > i && !g.is_edge(*x, i) && !v.is_edge(*x, i))
+        {
+            let mut ng = g.clone();
+            ng.add_edge(i, j);
+            res.push(ng);
+        }
+        fixed.pop();
+    }
+    res
+}
+
 pub fn output(receiver: Receiver<String>, filename: String, buffer: usize) {
     let mut bufout: Box<Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
@@ -99,4 +192,27 @@ pub fn output(receiver: Receiver<String>, filename: String, buffer: usize) {
         millis,
         plural(millis)
     );
+}
+
+#[cfg(test)]
+mod test {
+    use graph::format::from_g6;
+    use graph::Graph;
+    use graph::invariant;
+    use remove_add;
+
+    #[test]
+    fn test_remove_add() {
+        let g = from_g6(&"D?{".to_string()).unwrap();
+        fn inv(x: &Graph) -> f64 {
+            let lambda = 0.5;
+            let i = match invariant::diameter(&x) {
+                invariant::Distance::Val(i) => i as f64,
+                invariant::Distance::Inf => 0 as f64,
+            };
+            i - lambda * (invariant::connected_components(&x).len() - 1) as f64
+        };
+        println!("{:?}", remove_add(&g, 2, &inv, &invariant::is_connected));
+        assert!(false);
+    }
 }

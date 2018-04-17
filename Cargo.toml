@@ -6,7 +6,7 @@ authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
 [dependencies]
 
 rayon = "1.0"
-graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
+graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git", branch="discov-test"}
 time = "0.1"
 docopt = "0.8"
 serde="1.0"
