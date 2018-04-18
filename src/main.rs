@@ -27,7 +27,7 @@ const USAGE: &'static str = "
     and the result is outputed in csv format.
 
     Usage:
-        transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
+        transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>]
         transrust --help
 
     Options:
@@ -38,9 +38,10 @@ const USAGE: &'static str = "
                                [default: -]
         -b, --batch <batch>    Batch size [default: 1000000]
         -s, --buffer <buffer>  Size of the buffer [default: 2000000000]
-        -t <transformation>    The transformations to computes for the graphs.
-        -f <filter>            The filters to apply to the results of the transformations.
 ";
+//transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
+//-t <transformation>    The transformations to computes for the graphs.
+//-f <filter>            The filters to apply to the results of the transformations.
 
 #[derive(Debug, Deserialize)]
 struct Args {
@@ -48,8 +49,8 @@ struct Args {
     flag_o: String,
     flag_b: usize,
     flag_s: usize,
-    flag_t: Vec<String>,
-    flag_f: Vec<String>,
+    //flag_t: Vec<String>,
+    //flag_f: Vec<String>,
 }
 
 fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
@@ -62,6 +63,73 @@ fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
 }
 
 fn main() {
+    let args: Args = Docopt::new(USAGE)
+        .and_then(|d| d.deserialize())
+        .unwrap_or_else(|e| e.exit());
+    println!("{:?}", args);
+    let filename = args.flag_i;
+    let outfilename = args.flag_o;
+    let batch = args.flag_b;
+    let buffer = args.flag_s;
+    //let mut trsf = get_transfo(&args.flag_t[0]).unwrap_or_else(|x| panic!(x));
+    //for t in args.flag_t.iter().skip(1) {
+    //trsf = combine_transfos(*trsf, *get_transfo(t).unwrap_or_else(|x| panic!(x)));
+    //}
+    //let trsf = Arc::new(|ref x: &Graph| -> Vec<Graph> {
+    //combine_transfos(transfos::add_edge, transfos::remove_edge)(&x)
+    //});
+    //let contest =
+    //|ref x: &Graph| -> Result<String, ()> { as_filter(invariant::is_connected, to_g6)(&x) };
+    //let ftrs = Arc::new(|ref x: &Graph| -> Result<String, ()> {
+    //combine_filters(&contest, trash_node)(&x)
+    //});
+
+    let mut buf: Box<BufRead> = match filename.as_str() {
+        "-" => Box::new(BufReader::new(stdin())),
+        _ => Box::new(BufReader::new(
+            File::open(filename).expect("Could not open file"),
+        )),
+    };
+    let (sender, receiver): (
+        Sender<(Option<usize>, String)>,
+        Receiver<(Option<usize>, String)>,
+    ) = channel();
+    let whandle = thread::spawn(move || output_search(receiver, outfilename, buffer));
+
+    fn inv(x: &Graph) -> f64 {
+        let lambda = 0.5;
+        let i = match invariant::diameter(&x) {
+            invariant::Distance::Val(i) => -(i as f64),
+            invariant::Distance::Inf => -(x.order() as f64),
+        };
+        i - lambda * (invariant::connected_components(&x).len() - 1) as f64
+    };
+
+    let mut s = 1;
+    let mut total = 0;
+    let mut v;
+
+    while s > 0 {
+        v = read_graphs(&mut buf, batch);
+        s = v.len();
+        total += s;
+        if s > 0 {
+            eprintln!("Loaded a batch of size {}", s);
+            //handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
+            search_transfo_all(
+                v,
+                Arc::new(inv),
+                Arc::new(invariant::is_connected),
+                sender.clone(),
+            );
+            eprintln!("Finished a batch of size {} ({} so far)", s, total);
+        }
+    }
+    drop(sender);
+    whandle.join().expect("Could not join thread");
+}
+
+fn main2() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
