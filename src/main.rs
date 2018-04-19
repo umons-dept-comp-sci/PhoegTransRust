@@ -27,7 +27,7 @@ const USAGE: &'static str = "
     and the result is outputed in csv format.
 
     Usage:
-        transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>]
+        transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] [-k <k>] [-c] [-n]
         transrust --help
 
     Options:
@@ -38,6 +38,9 @@ const USAGE: &'static str = "
                                [default: -]
         -b, --batch <batch>    Batch size [default: 1000000]
         -s, --buffer <buffer>  Size of the buffer [default: 2000000000]
+        -k <k>                 Maximal number of edge removal. -1 if no bound. [default: -1]
+        -c                     Disables the output of improvements.
+        -n                     Disables the output of graphs that were not improved.
 ";
 //transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
 //-t <transformation>    The transformations to computes for the graphs.
@@ -49,6 +52,9 @@ struct Args {
     flag_o: String,
     flag_b: usize,
     flag_s: usize,
+    flag_k: isize,
+    flag_c: bool,
+    flag_n: bool,
     //flag_t: Vec<String>,
     //flag_f: Vec<String>,
 }
@@ -62,6 +68,16 @@ fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
     }
 }
 
+#[allow(dead_code)]
+fn mindiam(x: &Graph) -> f64 {
+    let lambda = 0.5;
+    let i = match invariant::diameter(&x) {
+        invariant::Distance::Val(i) => -(i as f64),
+        invariant::Distance::Inf => -(x.order() as f64),
+    };
+    i - lambda * (invariant::connected_components(&x).len() - 1) as f64
+}
+
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
@@ -71,18 +87,9 @@ fn main() {
     let outfilename = args.flag_o;
     let batch = args.flag_b;
     let buffer = args.flag_s;
-    //let mut trsf = get_transfo(&args.flag_t[0]).unwrap_or_else(|x| panic!(x));
-    //for t in args.flag_t.iter().skip(1) {
-    //trsf = combine_transfos(*trsf, *get_transfo(t).unwrap_or_else(|x| panic!(x)));
-    //}
-    //let trsf = Arc::new(|ref x: &Graph| -> Vec<Graph> {
-    //combine_transfos(transfos::add_edge, transfos::remove_edge)(&x)
-    //});
-    //let contest =
-    //|ref x: &Graph| -> Result<String, ()> { as_filter(invariant::is_connected, to_g6)(&x) };
-    //let ftrs = Arc::new(|ref x: &Graph| -> Result<String, ()> {
-    //combine_filters(&contest, trash_node)(&x)
-    //});
+    let k = args.flag_k;
+    let c = args.flag_c;
+    let n = args.flag_n;
 
     let mut buf: Box<BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
@@ -90,20 +97,33 @@ fn main() {
             File::open(filename).expect("Could not open file"),
         )),
     };
-    let (sender, receiver): (
-        Sender<(Option<usize>, String)>,
-        Receiver<(Option<usize>, String)>,
-    ) = channel();
-    let whandle = thread::spawn(move || output_search(receiver, outfilename, buffer));
+    let (sender, receiver) = channel();
+    let whandle = thread::spawn(move || output_search(receiver, outfilename, buffer, !c, !n));
 
-    fn inv(x: &Graph) -> f64 {
-        let lambda = 0.5;
-        let i = match invariant::diameter(&x) {
-            invariant::Distance::Val(i) => -(i as f64),
-            invariant::Distance::Inf => -(x.order() as f64),
-        };
-        i - lambda * (invariant::connected_components(&x).len() - 1) as f64
+    fn maxirreg2(x: &Graph) -> Box<Fn(&Graph) -> f64> {
+        let m = x.size() as f64;
+        Box::new(move |g: &Graph| -> f64 {
+            let lambda = g.order() as f64;
+            let i = invariant::irregularity(&g) as f64;
+            i - lambda * ((m - g.size() as f64).abs()) as f64
+        })
     };
+
+    fn maxirreg(x: &Graph) -> f64 {
+        let m = x.size() as f64;
+        let lambda = x.order() as f64;
+        let i = invariant::irregularity(&x) as f64;
+        i - lambda * ((m - x.size() as f64).abs()) as f64
+    };
+
+    fn maxirregclass2(x: &Graph) -> Box<Fn(&Graph) -> bool> {
+        let m = x.size();
+        Box::new(move |g: &Graph| -> bool { g.size() == m })
+    }
+
+    fn maxirregclass(x: &Graph) -> bool {
+        x.size() == 20
+    }
 
     let mut s = 1;
     let mut total = 0;
@@ -115,12 +135,14 @@ fn main() {
         total += s;
         if s > 0 {
             eprintln!("Loaded a batch of size {}", s);
+            eprintln!("num threads : {}", rayon::current_num_threads());
             //handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
             search_transfo_all(
                 v,
-                Arc::new(inv),
-                Arc::new(invariant::is_connected),
+                Arc::new(maxirreg2),
+                Arc::new(maxirregclass2),
                 sender.clone(),
+                k,
             );
             eprintln!("Finished a batch of size {} ({} so far)", s, total);
         }

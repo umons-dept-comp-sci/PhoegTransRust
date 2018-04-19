@@ -99,7 +99,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "graph"
 version = "0.1.0"
-source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git?branch=discov-test#d4cced65a2b300c316ce30476dd30977d30ec28d"
+source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git?branch=discov-test#8e848aa6c0435abe48c5f01a20094860452a0b05"
 dependencies = [
  "bit-vec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.10 (registry+https://github.com/rust-lang/crates.io-index)",

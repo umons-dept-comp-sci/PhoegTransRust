@@ -79,74 +79,79 @@ pub fn search_transfo_all<I, V, C>(
     v: Vec<Graph>,
     inv: Arc<I>,
     class: Arc<C>,
-    t: Sender<(Option<usize>, String)>,
+    t: Sender<(Result<(Graph, Graph, Graph, Graph, String, String), (Graph, String)>)>,
+    k: isize,
 ) where
-    I: Fn(&Graph) -> V + Send + Sync,
-    C: Fn(&Graph) -> bool + Send + Sync,
+    I: Fn(&Graph) -> Box<Fn(&Graph) -> V> + Send + Sync,
+    C: Fn(&Graph) -> Box<Fn(&Graph) -> bool> + Send + Sync,
     V: PartialOrd + Copy + ::std::fmt::Display + ::std::fmt::Debug,
 {
-    v.into_par_iter()
-        .for_each_with(t, |s, x| search_transfo(&x, inv.clone(), class.clone(), s));
+    v.into_par_iter().for_each_with(t, |s, x| {
+        search_transfo(&x, inv.clone(), class.clone(), s, k)
+    });
 }
 
 ///Maximizes the invariant
 pub fn search_transfo<I, V, C>(
     g: &Graph,
-    inv: Arc<I>,
-    class: Arc<C>,
-    s: &mut Sender<(Option<usize>, String)>,
+    invgen: Arc<I>,
+    classgen: Arc<C>,
+    s: &mut Sender<(Result<(Graph, Graph, Graph, Graph, String, String), (Graph, String)>)>,
+    mk: isize,
 ) where
-    I: Fn(&Graph) -> V,
-    C: Fn(&Graph) -> bool,
+    I: Fn(&Graph) -> Box<Fn(&Graph) -> V>,
+    C: Fn(&Graph) -> Box<Fn(&Graph) -> bool>,
     V: PartialOrd + Copy + ::std::fmt::Display + ::std::fmt::Debug,
 {
+    let inv = invgen(&g);
+    let class = classgen(&g);
     let ginv = inv(&g);
     let mut k = 0;
-    let mut r = remove_add(&g, k, inv.clone(), class.clone());
+    let mut r = remove_add(&g, k, |x| inv(x), |x| class(x));
     //TODO we use three times the same condition on the lenght of r. It's ugly
     if r.len() > 0 {
-        let mut ninv = r.iter()
-            .max_by(|x, y| x.3.partial_cmp(&y.3).unwrap())
-            .unwrap()
-            .3;
-        while r.len() > 0 && ninv <= ginv {
+        let mut done = r.iter()
+            .skip_while(|t| !t.4 || t.3 <= ginv)
+            .next()
+            .is_some();
+        while r.len() > 0 && (mk < 0 || k < mk as usize) && !done {
             k += 1;
-            r = remove_add(&g, k, inv.clone(), class.clone());
+            r = remove_add(&g, k, |x| inv(x), |x| class(x));
             if r.len() > 0 {
-                ninv = r.iter()
-                    .max_by(|x, y| x.3.partial_cmp(&y.3).unwrap())
-                    .unwrap()
-                    .3;
+                done = r.iter()
+                    .skip_while(|t| !t.4 || t.3 <= ginv)
+                    .next()
+                    .is_some();
             }
         }
-        if r.len() > 0 {
+        if done {
+            //let t = r.iter().skip_while(|x| x.3 < ginv).next().unwrap();
             for t in r {
-                s.send((
-                    Some(t.1.size()),
-                    format!(
-                        "{} -> {} | r : {} a : {} i : {}\n",
-                        g,
+                if t.4 && t.3 > ginv {
+                    s.send(Ok((
+                        g.clone(),
                         t.0,
-                        t.1.size(),
-                        t.2.size(),
-                        t.3
-                    ),
-                )).unwrap();
+                        t.1,
+                        t.2,
+                        format!("{}", ginv),
+                        format!("{}", t.3),
+                    ))).unwrap();
+                }
             }
         } else {
-            s.send((None, format!("{}\n", g)));
+            s.send(Err((g.clone(), format!("{}", ginv)))).unwrap();
         }
     } else {
-        s.send((None, format!("{}\n", g)));
+        s.send(Err((g.clone(), format!("{}", ginv)))).unwrap();
     }
 }
 
 pub fn remove_add<I, V, C>(
     g: &Graph,
     k: usize,
-    inv: Arc<I>,
-    class: Arc<C>,
-) -> Vec<(Graph, Graph, Graph, V)>
+    inv: I,
+    class: C,
+) -> Vec<(Graph, Graph, Graph, V, bool)>
 where
     I: Fn(&Graph) -> V,
     C: Fn(&Graph) -> bool,
@@ -157,7 +162,7 @@ where
     //Then we add enough to increase the invariant or just reach a graph in the class that cannot
     //be improved
     res.iter()
-        .map(|&(ref g, ref v)| descent_add(&g, &v, inv(&g), inv.clone(), class.clone()))
+        .map(|&(ref g, ref v)| descent_add(&g, &v, inv(&g), &inv, &class))
         .collect()
 }
 
@@ -165,9 +170,9 @@ fn descent_add<I, V, C>(
     g: &Graph,
     v: &Graph,
     gval: V,
-    inv: Arc<I>,
-    class: Arc<C>,
-) -> (Graph, Graph, Graph, V)
+    inv: &I,
+    class: &C,
+) -> (Graph, Graph, Graph, V, bool)
 where
     I: Fn(&Graph) -> V,
     C: Fn(&Graph) -> bool,
@@ -197,10 +202,16 @@ where
             }
         }
     }
-    (pcand.0, v.clone(), pcand.1, pcval)
+    (pcand.0.clone(), v.clone(), pcand.1, pcval, class(&pcand.0))
 }
 
-pub fn output_search(receiver: Receiver<(Option<usize>, String)>, filename: String, buffer: usize) {
+pub fn output_search(
+    receiver: Receiver<(Result<(Graph, Graph, Graph, Graph, String, String), (Graph, String)>)>,
+    filename: String,
+    buffer: usize,
+    imp: bool,
+    nimp: bool,
+) {
     let mut bufout: Box<Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
         _ => Box::new(BufWriter::with_capacity(
@@ -211,30 +222,58 @@ pub fn output_search(receiver: Receiver<(Option<usize>, String)>, filename: Stri
     let start = Instant::now();
     let mut i = 0;
     let mut mk = 0;
+    let mut ma = 0;
     let mut nok = vec![];
-    for (k, t) in receiver.iter() {
-        if let Some(k) = k {
-            i += 1;
-            if mk < k {
-                mk = k;
+    for k in receiver.iter() {
+        match k {
+            Ok((g, ng, r, a, gi, ni)) => {
+                i += 1;
+                if mk < r.size() {
+                    mk = r.size();
+                }
+                if ma < a.size() {
+                    ma = a.size()
+                }
+                if imp {
+                    bufout.write(&format!("{} ", i).into_bytes()).unwrap();
+                    bufout
+                        .write(&format!(
+                            "{} ({}) -> {} ({}), r: {}, a: {}\n",
+                            g,
+                            gi,
+                            ng,
+                            ni,
+                            r.size(),
+                            a.size()
+                        ).into_bytes())
+                        .unwrap();
+                }
             }
-            bufout.write(&t.into_bytes()).unwrap();
-        } else {
-            nok.push(t);
+            Err((g, gi)) => {
+                nok.push((g, gi));
+            }
         }
     }
     bufout.flush();
     let duration = start.elapsed();
     eprintln!(
-        "Done : {} improvement{}. Maximum k was {}",
+        "Done : {} improvement{}. Maximum k was {}, Maximum addition was {}",
         i,
         plural(i),
-        mk
+        mk,
+        ma
     );
     if nok.len() > 0 {
-        eprintln!("{} remaining graph{} : ", nok.len(), plural(nok.len()));
-        for t in nok {
-            bufout.write(&t.into_bytes()).unwrap();
+        eprint!("{} remaining graph{}", nok.len(), plural(nok.len()));
+        if nimp {
+            eprintln!(" :");
+            for (g, gi) in nok {
+                bufout
+                    .write(&format!("{} ({})\n", g, gi).into_bytes())
+                    .unwrap();
+            }
+        } else {
+            eprintln!("");
         }
     }
     bufout.flush();
