@@ -17,6 +17,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::sync::Arc;
 use docopt::Docopt;
+use std::f64;
 
 use utils::*;
 use compute::*;
@@ -100,6 +101,43 @@ fn main() {
     let (sender, receiver) = channel();
     let whandle = thread::spawn(move || output_search(receiver, outfilename, buffer, !c, !n));
 
+    fn maxemd(x: &Graph) -> Box<Fn(&Graph) -> f64> {
+        let d = match invariant::diameter(&x) {
+            invariant::Distance::Val(x) => x as f64,
+            _ => 0f64,
+        };
+        Box::new(move |g: &Graph| -> f64 {
+            let lambda1 = 1f64;
+            let lambda2 = 10f64;
+            let concomp = invariant::connected_components(&g).len() - 1;
+            let i = match concomp {
+                0 => (
+                    invariant::minus_avecc_avdist(&g),
+                    match invariant::diameter(&g) {
+                        invariant::Distance::Val(x) => x as f64,
+                        _ => 0f64,
+                    },
+                ),
+                _ => (0f64, 0f64),
+            };
+            i.0 - lambda1 * (i.1 - d).abs() - lambda2 * concomp as f64
+        })
+    }
+
+    fn emddiamclass(x: &Graph) -> Box<Fn(&Graph) -> bool> {
+        let d = match invariant::diameter(&x) {
+            invariant::Distance::Val(x) => x,
+            _ => 0,
+        };
+        Box::new(move |g: &Graph| -> bool {
+            let gd = match invariant::diameter(&g) {
+                invariant::Distance::Val(x) => x,
+                _ => 0,
+            };
+            invariant::is_connected(&g) && gd == d
+        })
+    }
+
     fn maxirreg2(x: &Graph) -> Box<Fn(&Graph) -> f64> {
         let m = x.size() as f64;
         Box::new(move |g: &Graph| -> f64 {
@@ -109,20 +147,9 @@ fn main() {
         })
     };
 
-    fn maxirreg(x: &Graph) -> f64 {
-        let m = x.size() as f64;
-        let lambda = x.order() as f64;
-        let i = invariant::irregularity(&x) as f64;
-        i - lambda * ((m - x.size() as f64).abs()) as f64
-    };
-
     fn maxirregclass2(x: &Graph) -> Box<Fn(&Graph) -> bool> {
         let m = x.size();
         Box::new(move |g: &Graph| -> bool { g.size() == m })
-    }
-
-    fn maxirregclass(x: &Graph) -> bool {
-        x.size() == 20
     }
 
     let mut s = 1;
@@ -139,8 +166,8 @@ fn main() {
             //handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
             search_transfo_all(
                 v,
-                Arc::new(maxirreg2),
-                Arc::new(maxirregclass2),
+                Arc::new(maxemd),
+                Arc::new(emddiamclass),
                 sender.clone(),
                 k,
             );
