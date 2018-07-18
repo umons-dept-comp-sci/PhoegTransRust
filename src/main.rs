@@ -6,6 +6,7 @@ extern crate serde_derive;
 
 mod utils;
 mod compute;
+mod errors;
 
 use graph::Graph;
 use graph::format::to_g6;
@@ -20,6 +21,8 @@ use docopt::Docopt;
 
 use utils::*;
 use compute::*;
+use errors::*;
+use std::error::Error;
 
 const USAGE: &str =
     "
@@ -85,7 +88,7 @@ fn transfotmp(g: &Graph) -> Vec<Graph> {
     res
 }
 
-fn run() {
+fn run() -> Result<(), TransProofError> {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
@@ -110,14 +113,16 @@ fn run() {
 
     let mut buf: Box<BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
-        _ => Box::new(BufReader::new(File::open(filename).expect("Could not open file"))),
+        _ => Box::new(BufReader::new(File::open(filename)?)),
     };
     let (sender, receiver): (Sender<String>, Receiver<String>) = channel();
-    let whandle = thread::spawn(move || output(receiver, outfilename, buffer));
+    let builder = thread::Builder::new();
+    let whandle = builder.spawn(move || output(receiver, outfilename, buffer))?;
 
     let mut s = 1;
     let mut total = 0;
     let mut v;
+    let mut res = Ok(());
 
     while s > 0 {
         v = read_graphs(&mut buf, batch);
@@ -125,14 +130,22 @@ fn run() {
         total += s;
         if s > 0 {
             eprintln!("Loaded a batch of size {}", s);
-            handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
+            res = handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
+            if res.is_err() {
+                break;
+            }
             eprintln!("Finished a batch of size {} ({} so far)", s, total);
         }
     }
     drop(sender);
-    whandle.join().expect("Could not join thread");
+    whandle.join()??;
+    res?;
+    Ok(())
 }
 
 fn main() {
-    run()
+    match run() {
+        Ok(_) => (),
+        Err(e) => println!("{}", e),
+    }
 }
