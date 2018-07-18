@@ -10,6 +10,7 @@ extern crate log;
 mod utils;
 mod compute;
 mod errors;
+mod transformation;
 
 use graph::Graph;
 use graph::format::to_g6;
@@ -27,36 +28,36 @@ use compute::*;
 use errors::*;
 
 const USAGE: &str =
-    "
+"
     Transrust is a tool to compute the results of different transformations on a given set \
-     of
+        of
     graphs. These graphs have to be given in graph6 format from the input (one signature \
-     per line)
+                                                                           per line)
     and the result is outputed in csv format.
 
     Usage:
         transrust [-i \
-     <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
+            <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
         \
-     transrust --help
+            transrust --help
 
     Options:
         -h, --help             Show this message.
         -i, \
-     --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
+            --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
                                \
-     [default: -]
+                                   [default: -]
         -o, --output <output>  File where to write the result. Uses the \
-     standard output if '-'
+            standard output if '-'
                                [default: -]
         -b, --batch \
-     <batch>    Batch size [default: 1000000]
+            <batch>    Batch size [default: 1000000]
         -s, --buffer <buffer>  Size of the buffer \
-     [default: 2000000000]
+            [default: 2000000000]
         -t <transformation>    The transformations to computes for the \
-     graphs.
+            graphs.
         -f <filter>            The filters to apply to the results of the \
-     transformations.
+            transformations.
 ";
 
 #[derive(Debug, Deserialize)]
