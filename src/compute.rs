@@ -10,25 +10,22 @@ use std::sync::Arc;
 use utils::*;
 
 pub fn apply_filters<F>(g: &Graph, ftrs: Arc<F>) -> Result<String, ()>
-where
-    F: Fn(&Graph) -> Result<String, ()>,
+    where F: Fn(&Graph) -> Result<String, ()>
 {
     ftrs(&g)
 }
 
 /// Applying transformations to the graph g.
 pub fn apply_transfos<F>(g: &Graph, trs: Arc<F>) -> Vec<Graph>
-where
-    F: Fn(&Graph) -> Vec<Graph>,
+    where F: Fn(&Graph) -> Vec<Graph>
 {
     trs(&g).iter().map(|x| canon_graph(x).0).collect()
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graph<F, T>(g: Graph, t: &mut Sender<String>, trsf: Arc<F>, ftrs: Arc<T>)
-where
-    F: Fn(&Graph) -> Vec<Graph>,
-    T: Fn(&Graph) -> Result<String, ()>,
+    where F: Fn(&Graph) -> Vec<Graph>,
+          T: Fn(&Graph) -> Result<String, ()>
 {
     let r = apply_transfos(&g, trsf);
     for h in r {
@@ -41,9 +38,8 @@ where
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graphs<F, T>(v: Vec<Graph>, t: Sender<String>, trsf: Arc<F>, ftrs: Arc<T>)
-where
-    F: Fn(&Graph) -> Vec<Graph> + Send + Sync,
-    T: Fn(&Graph) -> Result<String, ()> + Send + Sync,
+    where F: Fn(&Graph) -> Vec<Graph> + Send + Sync,
+          T: Fn(&Graph) -> Result<String, ()> + Send + Sync
 {
     v.into_par_iter()
         .for_each_with(t, |s, x| handle_graph(x, s, trsf.clone(), ftrs.clone()));
@@ -52,20 +48,21 @@ where
 /// Read files of graphs
 /// (file of sigs)
 pub fn read_graphs<F>(rdr: &mut F, batchsize: usize) -> Vec<Graph>
-where
-    F: BufRead,
+    where F: BufRead
 {
     let mut t = Vec::with_capacity(batchsize);
     for l in rdr.lines().by_ref().take(batchsize) {
         match l {
-            Ok(sig) => match from_g6(&sig) {
-                Ok(g) => {
-                    t.push(g);
+            Ok(sig) => {
+                match from_g6(&sig) {
+                    Ok(g) => {
+                        t.push(g);
+                    }
+                    Err(e) => {
+                        eprintln!("Wrong input : {}", e);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("Wrong input : {}", e);
-                }
-            },
+            }
             Err(e) => {
                 eprintln!("{}", e);
             }
@@ -77,10 +74,10 @@ where
 pub fn output(receiver: Receiver<String>, filename: String, buffer: usize) {
     let mut bufout: Box<Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
-        _ => Box::new(BufWriter::with_capacity(
-            buffer,
-            File::open(filename).expect("Could not open file"),
-        )),
+        _ => {
+            Box::new(BufWriter::with_capacity(buffer,
+                                              File::open(filename).expect("Could not open file")))
+        }
     };
     let start = Instant::now();
     let mut i = 0;
@@ -92,11 +89,9 @@ pub fn output(receiver: Receiver<String>, filename: String, buffer: usize) {
     eprintln!("Done : {} transformation{}", i, plural(i));
     let secs = duration.as_secs() as usize;
     let millis = (duration.subsec_nanos() as usize) / (1e6 as usize);
-    eprintln!(
-        "Took {} second{} and {} millisecond{}",
-        secs,
-        plural(secs),
-        millis,
-        plural(millis)
-    );
+    eprintln!("Took {} second{} and {} millisecond{}",
+              secs,
+              plural(secs),
+              millis,
+              plural(millis));
 }

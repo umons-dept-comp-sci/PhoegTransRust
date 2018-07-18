@@ -21,25 +21,37 @@ use docopt::Docopt;
 use utils::*;
 use compute::*;
 
-const USAGE: &'static str = "
-    Transrust is a tool to compute the results of different transformations on a given set of
-    graphs. These graphs have to be given in graph6 format from the input (one signature per line)
+const USAGE: &str =
+    "
+    Transrust is a tool to compute the results of different transformations on a given set \
+     of
+    graphs. These graphs have to be given in graph6 format from the input (one signature \
+     per line)
     and the result is outputed in csv format.
 
     Usage:
-        transrust [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
-        transrust --help
+        transrust [-i \
+     <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
+        \
+     transrust --help
 
     Options:
         -h, --help             Show this message.
-        -i, --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
+        -i, \
+     --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
+                               \
+     [default: -]
+        -o, --output <output>  File where to write the result. Uses the \
+     standard output if '-'
                                [default: -]
-        -o, --output <output>  File where to write the result. Uses the standard output if '-'
-                               [default: -]
-        -b, --batch <batch>    Batch size [default: 1000000]
-        -s, --buffer <buffer>  Size of the buffer [default: 2000000000]
-        -t <transformation>    The transformations to computes for the graphs.
-        -f <filter>            The filters to apply to the results of the transformations.
+        -b, --batch \
+     <batch>    Batch size [default: 1000000]
+        -s, --buffer <buffer>  Size of the buffer \
+     [default: 2000000000]
+        -t <transformation>    The transformations to computes for the \
+     graphs.
+        -f <filter>            The filters to apply to the results of the \
+     transformations.
 ";
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +73,19 @@ fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
     }
 }
 
-fn main() {
+fn transfotmp(g: &Graph) -> Vec<Graph> {
+    let mut res = Vec::new();
+    res.append(&mut transfos::remove_edge(g));
+    res.append(&mut transfos::add_edge(g));
+    res.append(&mut transfos::rotation(g));
+    res.append(&mut transfos::move_distinct(g));
+    res.append(&mut transfos::detour(g));
+    res.append(&mut transfos::shortcut(g));
+    res.append(&mut transfos::two_opt(g));
+    res
+}
+
+fn run() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
@@ -70,24 +94,23 @@ fn main() {
     let outfilename = args.flag_o;
     let batch = args.flag_b;
     let buffer = args.flag_s;
-    //let mut trsf = get_transfo(&args.flag_t[0]).unwrap_or_else(|x| panic!(x));
-    //for t in args.flag_t.iter().skip(1) {
-    //trsf = combine_transfos(*trsf, *get_transfo(t).unwrap_or_else(|x| panic!(x)));
-    //}
+    // let mut trsf = get_transfo(&args.flag_t[0]).unwrap_or_else(|x| panic!(x));
+    // for t in args.flag_t.iter().skip(1) {
+    // trsf = combine_transfos(*trsf, *get_transfo(t).unwrap_or_else(|x| panic!(x)));
+    //
     let trsf = Arc::new(|ref x: &Graph| -> Vec<Graph> {
-        combine_transfos(transfos::add_edge, transfos::remove_edge)(&x)
+        // combine_transfos(transfos::add_edge, transfos::remove_edge)(&x)
+        // transfos::rotation(&x)
+        transfotmp(&x)
     });
     let contest =
         |ref x: &Graph| -> Result<String, ()> { as_filter(invariant::is_connected, to_g6)(&x) };
-    let ftrs = Arc::new(|ref x: &Graph| -> Result<String, ()> {
-        combine_filters(&contest, trash_node)(&x)
-    });
+    let ftrs =
+        Arc::new(|ref x: &Graph| -> Result<String, ()> { combine_filters(&contest, trash_node)(&x) });
 
     let mut buf: Box<BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
-        _ => Box::new(BufReader::new(
-            File::open(filename).expect("Could not open file"),
-        )),
+        _ => Box::new(BufReader::new(File::open(filename).expect("Could not open file"))),
     };
     let (sender, receiver): (Sender<String>, Receiver<String>) = channel();
     let whandle = thread::spawn(move || output(receiver, outfilename, buffer));
@@ -108,4 +131,8 @@ fn main() {
     }
     drop(sender);
     whandle.join().expect("Could not join thread");
+}
+
+fn main() {
+    run()
 }
