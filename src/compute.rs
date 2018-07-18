@@ -70,12 +70,12 @@ pub fn read_graphs<F>(rdr: &mut F, batchsize: usize) -> Vec<Graph>
                         t.push(g);
                     }
                     Err(e) => {
-                        eprintln!("Wrong input : {}", e);
+                        warn!("Wrong input : {}", e);
                     }
                 }
             }
             Err(e) => {
-                eprintln!("{}", e);
+                warn!("{}", e);
             }
         }
     }
@@ -97,13 +97,13 @@ pub fn output(receiver: Receiver<String>,
         bufout.write(&t.into_bytes())?;
     }
     let duration = start.elapsed();
-    eprintln!("Done : {} transformation{}", i, plural(i));
+    info!("Done : {} transformation{}", i, plural(i));
     let secs = duration.as_secs() as usize;
     let millis = (duration.subsec_nanos() as usize) / (1e6 as usize);
-    eprintln!("Took {} second{} and {} millisecond{}",
-              secs,
-              plural(secs),
-              millis,
-              plural(millis));
+    info!("Took {} second{} and {} millisecond{}",
+          secs,
+          plural(secs),
+          millis,
+          plural(millis));
     Ok(())
 }

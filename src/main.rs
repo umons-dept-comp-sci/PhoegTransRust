@@ -1,8 +1,11 @@
 extern crate docopt;
 extern crate graph;
 extern crate rayon;
+extern crate env_logger;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate log;
 
 mod utils;
 mod compute;
@@ -22,7 +25,6 @@ use docopt::Docopt;
 use utils::*;
 use compute::*;
 use errors::*;
-use std::error::Error;
 
 const USAGE: &str =
     "
@@ -92,7 +94,9 @@ fn run() -> Result<(), TransProofError> {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
-    println!("{:?}", args);
+    let env = env_logger::Env::default().filter_or("RUST_LOG", "info");
+    env_logger::init_from_env(env);
+    debug!("{:?}", args);
     let filename = args.flag_i;
     let outfilename = args.flag_o;
     let batch = args.flag_b;
@@ -129,12 +133,12 @@ fn run() -> Result<(), TransProofError> {
         s = v.len();
         total += s;
         if s > 0 {
-            eprintln!("Loaded a batch of size {}", s);
+            info!("Loaded a batch of size {}", s);
             res = handle_graphs(v, sender.clone(), trsf.clone(), ftrs.clone());
             if res.is_err() {
                 break;
             }
-            eprintln!("Finished a batch of size {} ({} so far)", s, total);
+            info!("Finished a batch of size {} ({} so far)", s, total);
         }
     }
     drop(sender);
@@ -146,6 +150,6 @@ fn run() -> Result<(), TransProofError> {
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(e) => println!("{}", e),
+        Err(e) => error!("{}", e),
     }
 }
