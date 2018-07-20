@@ -4,13 +4,13 @@ use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 
 #[derive(Clone)]
-enum Transformation<'a> {
-    Single(Arc<Fn(&Graph) -> Vec<Graph> + 'a>),
+pub enum Transformation<'a> {
+    Single(Arc<Fn(&Graph) -> Vec<Graph> + Send + Sync + 'a>),
     Multiple(Vec<Transformation<'a>>),
 }
 
 impl<'a> Transformation<'a> {
-    fn from_name(s: &str) -> Option<Transformation> {
+    pub fn from_name(s: &str) -> Option<Transformation> {
         match s.trim().to_lowercase().as_str() {
             "add_edge" => Some(Transformation::Single(Arc::new(transfos::add_edge))),
             "remove_edge" => Some(Transformation::Single(Arc::new(transfos::remove_edge))),
@@ -24,7 +24,7 @@ impl<'a> Transformation<'a> {
         }
     }
 
-    fn apply(&self, g: &Graph) -> Vec<Graph> {
+    pub fn apply(&self, g: &Graph) -> Vec<Graph> {
         match *self {
             Transformation::Multiple(ref l) => {
                 let mut res = Vec::new();
@@ -39,7 +39,7 @@ impl<'a> Transformation<'a> {
 }
 
 impl<'a, F> From<F> for Transformation<'a>
-    where F: Fn(&Graph) -> Vec<Graph> + 'a
+    where F: Fn(&Graph) -> Vec<Graph> + Send + Sync + 'a
 {
     fn from(f: F) -> Self {
         Transformation::Single(Arc::new(f))

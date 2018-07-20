@@ -9,6 +9,7 @@ use std::time::Instant;
 use std::sync::Arc;
 use utils::*;
 use errors::*;
+use transformation::*;
 
 pub fn apply_filters<F>(g: &Graph, ftrs: Arc<F>) -> Result<String, ()>
     where F: Fn(&Graph) -> Result<String, ()>
@@ -17,20 +18,17 @@ pub fn apply_filters<F>(g: &Graph, ftrs: Arc<F>) -> Result<String, ()>
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos<F>(g: &Graph, trs: Arc<F>) -> Vec<Graph>
-    where F: Fn(&Graph) -> Vec<Graph>
-{
-    trs(&g).iter().map(|x| canon_graph(x).0).collect()
+pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<Graph> {
+    trs.apply(&g).iter().map(|x| canon_graph(x).0).collect()
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
-pub fn handle_graph<F, T>(g: Graph,
-                          t: &mut Sender<String>,
-                          trsf: Arc<F>,
-                          ftrs: Arc<T>)
-                          -> Result<(), TransProofError>
-    where F: Fn(&Graph) -> Vec<Graph>,
-          T: Fn(&Graph) -> Result<String, ()>
+pub fn handle_graph<T>(g: Graph,
+                       t: &mut Sender<String>,
+                       trsf: &Transformation,
+                       ftrs: Arc<T>)
+                       -> Result<(), TransProofError>
+    where T: Fn(&Graph) -> Result<String, ()>
 {
     let r = apply_transfos(&g, trsf);
     for h in r {
@@ -43,16 +41,15 @@ pub fn handle_graph<F, T>(g: Graph,
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
-pub fn handle_graphs<F, T>(v: Vec<Graph>,
-                           t: Sender<String>,
-                           trsf: Arc<F>,
-                           ftrs: Arc<T>)
-                           -> Result<(), TransProofError>
-    where F: Fn(&Graph) -> Vec<Graph> + Send + Sync,
-          T: Fn(&Graph) -> Result<String, ()> + Send + Sync
+pub fn handle_graphs<T>(v: Vec<Graph>,
+                        t: Sender<String>,
+                        trsf: &Transformation,
+                        ftrs: Arc<T>)
+                        -> Result<(), TransProofError>
+    where T: Fn(&Graph) -> Result<String, ()> + Send + Sync
 {
     v.into_par_iter()
-        .try_for_each_with(t, |s, x| handle_graph(x, s, trsf.clone(), ftrs.clone()))?;
+        .try_for_each_with(t, |s, x| handle_graph(x, s, &trsf, ftrs.clone()))?;
     Ok(())
 }
 
