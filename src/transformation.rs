@@ -12,7 +12,7 @@ macro_rules! addtransfo {
 
 lazy_static! {
     pub static ref NAMES: HashMap<&'static str, (Transformation<'static>, &'static str)> = {
-        let mut m = HashMap::new();
+        let mut m = HashMap::with_capacity(8);
         addtransfo!(m, "add_edge",add_edge,"Adds an edge");
         addtransfo!(m, "remove_edge",remove_edge,"Removes an edge");
         addtransfo!(m, "rotation",rotation,"Rotates an edge");
