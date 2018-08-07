@@ -38,16 +38,16 @@ const USAGE: &str =
 
     Usage:
         transrust [-v] \
-     [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] -t <transformation>... -f <filter>...
-        \
-     transrust --help
+     [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] (-t <transformation>)... (-f \
+     <filter>)...
+        transrust --help
 
     Options:
-        -h, --help             Show this message.
-        -v, \
-     --verbose          Shows more information.
-        -i, --input <input>    File containing \
-     the graph6 signatures. Uses the standard input if '-'.
+        -h, --help             Show this \
+     message.
+        -v, --verbose          Shows more information.
+        -i, --input <input>    \
+     File containing the graph6 signatures. Uses the standard input if '-'.
                                \
      [default: -]
         -o, --output <output>  File where to write the result. Uses the \
@@ -74,15 +74,6 @@ struct Args {
     flag_f: Vec<String>,
 }
 
-fn get_transfo(s: &String) -> Result<Box<Fn(&Graph) -> Vec<Graph>>, String> {
-    match s.as_str() {
-        "rotation" => Ok(Box::new(move |ref x| transfos::rotation(&x))),
-        "add_edge" => Ok(Box::new(move |ref x| transfos::add_edge(&x))),
-        "remove_edge" => Ok(Box::new(move |ref x| transfos::remove_edge(&x))),
-        _ => Err(format!("Transformation '{}' not defined.", s)),
-    }
-}
-
 fn transfotmp(g: &Graph) -> Vec<Graph> {
     let mut res = Vec::new();
     res.append(&mut transfos::remove_edge(g));
@@ -95,15 +86,37 @@ fn transfotmp(g: &Graph) -> Vec<Graph> {
     res
 }
 
-fn run() -> Result<(), TransProofError> {
+fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
+    let mut transfo = Transformation::from_name(&lst[0]);
+    let mut i = 1;
+    while transfo.is_none() && i < lst.len() {
+        warn!("Unknown transformation : {}.", lst[i - 1]);
+        transfo = Transformation::from_name(&lst[i]);
+        i += 1;
+    }
+    if transfo.is_some() {
+        let mut ttrs;
+        while i < lst.len() {
+            ttrs = Transformation::from_name(&lst[i]);
+            if ttrs.is_some() {
+                match transfo.as_mut() {
+                    Some(t) => *t += ttrs.unwrap(),
+                    None => panic!("Should not happen."),
+                }
+            } else {
+                warn!("Unknown transformation : {}", lst[i]);
+            }
+            i += 1;
+        }
+    }
+    transfo
+}
+
+fn main() -> Result<(), TransProofError> {
     // Parsing args
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
-    let filename = args.flag_i;
-    let outfilename = args.flag_o;
-    let batch = args.flag_b;
-    let buffer = args.flag_s;
     let verbose = args.flag_v;
 
     // Init logger
@@ -114,6 +127,13 @@ fn run() -> Result<(), TransProofError> {
         builder.default_format_module_path(false);
     }
     builder.init();
+    debug!("{:?}", args);
+
+    let filename = args.flag_i;
+    let outfilename = args.flag_o;
+    let batch = args.flag_b;
+    let buffer = args.flag_s;
+    let transfos = args.flag_t;
 
     // Init filters
     let contest =
@@ -132,7 +152,13 @@ fn run() -> Result<(), TransProofError> {
     let builder = thread::Builder::new();
     let whandle = builder.spawn(move || output(receiver, outfilename, buffer))?;
 
-    let mut trsf = Transformation::from(|x: &Graph| transfos::move_distinct(x));
+    // Init transformations
+    let trs = init_transfo(&transfos);
+    if trs.is_none() {
+        error!("No transformation found.");
+        panic!("No transformation found.");
+    }
+    let trs = trs.unwrap();
 
     let mut s = 1;
     let mut total = 0;
@@ -144,7 +170,7 @@ fn run() -> Result<(), TransProofError> {
         total += s;
         if s > 0 {
             info!("Loaded a batch of size {}", s);
-            res = handle_graphs(v, sender.clone(), &trsf, ftrs.clone());
+            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone());
             if res.is_err() {
                 break;
             }
@@ -155,11 +181,4 @@ fn run() -> Result<(), TransProofError> {
     whandle.join()??;
     res?;
     Ok(())
-}
-
-fn main() {
-    match run() {
-        Ok(_) => (),
-        Err(e) => error!("{}", e),
-    }
 }

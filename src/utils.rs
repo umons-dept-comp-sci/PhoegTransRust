@@ -25,18 +25,6 @@ pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<Fn(&Graph) -> Result<String,
     })
 }
 
-pub fn combine_transfos<'a, F, G>(f: F, g: G) -> Box<Fn(&Graph) -> Vec<Graph> + 'a>
-    where F: Fn(&Graph) -> Vec<Graph> + 'a,
-          G: Fn(&Graph) -> Vec<Graph> + 'a
-{
-    Box::new(move |x| {
-        let mut t = f(x);
-        let mut v = g(x);
-        t.append(&mut v);
-        t
-    })
-}
-
 pub fn trash_node(_: &Graph) -> Result<String, ()> {
     Ok("TRASH".to_string())
 }

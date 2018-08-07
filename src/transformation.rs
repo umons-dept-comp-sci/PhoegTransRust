@@ -16,7 +16,9 @@ impl<'a> Transformation<'a> {
             "remove_edge" => Some(Transformation::Single(Arc::new(transfos::remove_edge))),
             "rotation" => Some(Transformation::Single(Arc::new(transfos::rotation))),
             "slide" => Some(Transformation::Single(Arc::new(transfos::slide))),
-            "move_distinct" => Some(Transformation::Single(Arc::new(transfos::move_distinct))),
+            "move_distinct" | "move" => {
+                Some(Transformation::Single(Arc::new(transfos::move_distinct)))
+            }
             "two_opt" => Some(Transformation::Single(Arc::new(transfos::two_opt))),
             "shortcut" => Some(Transformation::Single(Arc::new(transfos::shortcut))),
             "detour" => Some(Transformation::Single(Arc::new(transfos::detour))),
@@ -75,7 +77,6 @@ impl<'a, T> AddAssign<T> for Transformation<'a>
 {
     fn add_assign(&mut self, other: T) {
         let other = other.into();
-        let mut ls: Vec<Transformation<'a>>;
         if let Transformation::Multiple(ref mut ls) = *self {
             add_other(ls, other);
         } else {
