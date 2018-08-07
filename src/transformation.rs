@@ -2,6 +2,28 @@ use graph::Graph;
 use graph::transfos;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
+use std::collections::HashMap;
+
+macro_rules! addtransfo {
+    ( $m:ident, $n:expr, $f:ident, $d:expr ) => {
+        $m.insert($n,(Transformation::Single(Arc::new(transfos::$f)), $d))
+    }
+}
+
+lazy_static! {
+    pub static ref NAMES: HashMap<&'static str, (Transformation<'static>, &'static str)> = {
+        let mut m = HashMap::new();
+        addtransfo!(m, "add_edge",add_edge,"Adds an edge");
+        addtransfo!(m, "remove_edge",remove_edge,"Removes an edge");
+        addtransfo!(m, "rotation",rotation,"Rotates an edge");
+        addtransfo!(m, "slide",slide,"Rotation(a,b,c) where b and c are adjacent.");
+        addtransfo!(m, "move_distinct",move_distinct,"Moves an edge ab between to distict vertices c and d.");
+        addtransfo!(m, "two_opt",two_opt,"Switch two edges.");
+        addtransfo!(m, "short_cut",shortcut,"Adds a sort cut between two vertices a and c at distance 2.");
+        addtransfo!(m, "detour",detour,"Replace an edge by a path of lenght 2.");
+        m
+    };
+}
 
 #[derive(Clone)]
 pub enum Transformation<'a> {
@@ -11,19 +33,7 @@ pub enum Transformation<'a> {
 
 impl<'a> Transformation<'a> {
     pub fn from_name(s: &str) -> Option<Transformation> {
-        match s.trim().to_lowercase().as_str() {
-            "add_edge" => Some(Transformation::Single(Arc::new(transfos::add_edge))),
-            "remove_edge" => Some(Transformation::Single(Arc::new(transfos::remove_edge))),
-            "rotation" => Some(Transformation::Single(Arc::new(transfos::rotation))),
-            "slide" => Some(Transformation::Single(Arc::new(transfos::slide))),
-            "move_distinct" | "move" => {
-                Some(Transformation::Single(Arc::new(transfos::move_distinct)))
-            }
-            "two_opt" => Some(Transformation::Single(Arc::new(transfos::two_opt))),
-            "shortcut" => Some(Transformation::Single(Arc::new(transfos::shortcut))),
-            "detour" => Some(Transformation::Single(Arc::new(transfos::detour))),
-            _ => None,
-        }
+        NAMES.get(s.trim().to_lowercase().as_str()).map(|x| x.0.clone())
     }
 
     pub fn apply(&self, g: &Graph) -> Vec<Graph> {

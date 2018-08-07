@@ -6,6 +6,8 @@ extern crate env_logger;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate lazy_static;
 
 mod utils;
 mod compute;
@@ -14,7 +16,6 @@ mod transformation;
 
 use graph::Graph;
 use graph::format::to_g6;
-use graph::transfos;
 use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
@@ -72,18 +73,6 @@ struct Args {
     flag_s: usize,
     flag_t: Vec<String>,
     flag_f: Vec<String>,
-}
-
-fn transfotmp(g: &Graph) -> Vec<Graph> {
-    let mut res = Vec::new();
-    res.append(&mut transfos::remove_edge(g));
-    res.append(&mut transfos::add_edge(g));
-    res.append(&mut transfos::rotation(g));
-    res.append(&mut transfos::move_distinct(g));
-    res.append(&mut transfos::detour(g));
-    res.append(&mut transfos::shortcut(g));
-    res.append(&mut transfos::two_opt(g));
-    res
 }
 
 fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
