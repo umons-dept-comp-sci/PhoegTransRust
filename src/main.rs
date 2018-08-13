@@ -16,7 +16,7 @@ mod transformation;
 
 use graph::Graph;
 use graph::format::to_g6;
-use graph::invariant;
+// use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -29,6 +29,11 @@ use compute::*;
 use errors::*;
 use transformation::*;
 
+// (-f <filter>)...
+// -f <filter>            The filters \
+// to apply to the results of the transformations.
+// t <transformation>    The transformations to computes for the \
+// graphs.
 const USAGE: &str =
     "
     Transrust is a tool to compute the results of different transformations on a given set \
@@ -38,17 +43,20 @@ const USAGE: &str =
     and the result is outputed in csv format.
 
     Usage:
-        transrust [-v] \
-     [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] (-t <transformation>)... (-f \
-     <filter>)...
-        transrust --help
+        transrust [-v | \
+     --verbose] [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] <transformations>...
+     \
+     transrust (-h | --help)
+     transrust --transfos
 
     Options:
-        -h, --help             Show this \
-     message.
+        -h, --help             \
+     Show this message.
         -v, --verbose          Shows more information.
-        -i, --input <input>    \
-     File containing the graph6 signatures. Uses the standard input if '-'.
+     --transfos                \
+     Shows a list of available transformations.
+        -i, --input <input>    File containing \
+     the graph6 signatures. Uses the standard input if '-'.
                                \
      [default: -]
         -o, --output <output>  File where to write the result. Uses the \
@@ -58,24 +66,23 @@ const USAGE: &str =
      <batch>    Batch size [default: 1000000]
         -s, --buffer <buffer>  Size of the buffer \
      [default: 2000000000]
-        -t <transformation>    The transformations to computes for the \
-     graphs.
-        -f <filter>            The filters to apply to the results of the \
-     transformations.
 ";
 
 #[derive(Debug, Deserialize, Clone)]
 struct Args {
     flag_v: bool,
+    flag_transfos: bool,
     flag_i: String,
     flag_o: String,
     flag_b: usize,
     flag_s: usize,
-    flag_t: Vec<String>,
-    flag_f: Vec<String>,
+    arg_transformations: Vec<String>,
 }
 
 fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
+    if lst.is_empty() {
+        return None;
+    }
     let mut transfo = Transformation::from_name(&lst[0]);
     let mut i = 1;
     while transfo.is_none() && i < lst.len() {
@@ -108,6 +115,11 @@ fn main() -> Result<(), TransProofError> {
         .unwrap_or_else(|e| e.exit());
     let verbose = args.flag_v;
 
+    if args.flag_transfos {
+        print_transfos();
+        std::process::exit(0);
+    }
+
     // Init logger
     let debug_level = if verbose { "debug" } else { "info" };
     let env = env_logger::Env::default().filter_or("RUST_LOG", debug_level);
@@ -122,11 +134,10 @@ fn main() -> Result<(), TransProofError> {
     let outfilename = args.flag_o;
     let batch = args.flag_b;
     let buffer = args.flag_s;
-    let transfos = args.flag_t;
+    let transfos = args.arg_transformations;
 
     // Init filters
-    let contest =
-        |ref x: &Graph| -> Result<String, ()> { as_filter(invariant::is_connected, to_g6)(&x) };
+    let contest = |ref x: &Graph| -> Result<String, ()> { as_filter(|_| true, to_g6)(&x) };
     let ftrs =
         Arc::new(|ref x: &Graph| -> Result<String, ()> { combine_filters(&contest, trash_node)(&x) });
 

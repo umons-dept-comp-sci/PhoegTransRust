@@ -10,8 +10,15 @@ macro_rules! addtransfo {
     }
 }
 
+macro_rules! addalias {
+    ( $m:ident, $n:expr, $a:expr ) => {
+        assert!(TRANSFO_NAMES.get($a).is_some());
+        $m.insert($n, $a);
+    }
+}
+
 lazy_static! {
-    pub static ref NAMES: HashMap<&'static str, (Transformation<'static>, &'static str)> = {
+    pub static ref TRANSFO_NAMES: HashMap<&'static str, (Transformation<'static>, &'static str)> = {
         let mut m = HashMap::with_capacity(8);
         addtransfo!(m, "add_edge",add_edge,"Adds an edge");
         addtransfo!(m, "remove_edge",remove_edge,"Removes an edge");
@@ -23,6 +30,33 @@ lazy_static! {
         addtransfo!(m, "detour",detour,"Replace an edge by a path of lenght 2.");
         m
     };
+
+    pub static ref TRANSFO_ALIASES: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::with_capacity(1);
+        addalias!(m,"move","move_distinct");
+        m
+    };
+}
+
+pub fn print_transfos() {
+    let mut aliases: HashMap<&str, Vec<&str>> = HashMap::new();
+    for (k, v) in TRANSFO_ALIASES.iter() {
+        if !aliases.contains_key(v) {
+            aliases.insert(v, Vec::new());
+        }
+        aliases.get_mut(v).unwrap().push(k);
+    }
+    for (transfo, data) in TRANSFO_NAMES.iter() {
+        let a = aliases.get(transfo)
+            .map_or("".to_owned(), |x| {
+                if x.len() > 1 {
+                    "[aliases : ".to_owned()
+                } else {
+                    "[alias : ".to_owned()
+                }
+            } + &x.join(", ") + "]");
+        println!("{} : {} {}", transfo, data.1, a);
+    }
 }
 
 #[derive(Clone)]
@@ -33,7 +67,10 @@ pub enum Transformation<'a> {
 
 impl<'a> Transformation<'a> {
     pub fn from_name(s: &str) -> Option<Transformation> {
-        NAMES.get(s.trim().to_lowercase().as_str()).map(|x| x.0.clone())
+        let s = s.trim().to_lowercase();
+        TRANSFO_NAMES.get(s.as_str())
+            .or(TRANSFO_ALIASES.get(s.as_str()).and_then(|x| TRANSFO_NAMES.get(x)))
+            .map(|x| x.0.clone())
     }
 
     pub fn apply(&self, g: &Graph) -> Vec<Graph> {
