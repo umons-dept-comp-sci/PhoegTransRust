@@ -22,6 +22,7 @@ lazy_static! {
         let mut m = HashMap::with_capacity(8);
         addtransfo!(m, "add_edge",add_edge,"Adds an edge");
         addtransfo!(m, "remove_edge",remove_edge,"Removes an edge");
+        addtransfo!(m, "remove_vertex",remove_vertex,"Removes a vertex");
         addtransfo!(m, "rotation",rotation,"Rotates an edge");
         addtransfo!(m, "slide",slide,"Rotation(a,b,c) where b and c are adjacent.");
         addtransfo!(m, "move_distinct",move_distinct,"Moves an edge ab between to distict vertices c and d.");
