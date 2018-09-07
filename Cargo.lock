@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "graph"
 version = "0.1.0"
-source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git#7382a8840004b82c0d80edd65689e30f404cb62f"
+source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git#b506f1e51504cf47434edcd9c187062f557aff8e"
 dependencies = [
  "bit-vec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.23 (registry+https://github.com/rust-lang/crates.io-index)",
