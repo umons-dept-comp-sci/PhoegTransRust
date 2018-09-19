@@ -36,37 +36,35 @@ use transformation::*;
 // graphs.
 const USAGE: &str =
     "
-    Transrust is a tool to compute the results of different transformations on a given set \
-     of
-    graphs. These graphs have to be given in graph6 format from the input (one signature \
-     per line)
-    and the result is outputed in csv format.
+Transrust is a tool to compute the results of different transformations on a
+given set of \
+     graphs. These graphs have to be given in graph6 format from the
+input (one signature per \
+     line) and the result is outputed in csv format.
 
-    Usage:
-        transrust [-v | \
-     --verbose] [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] <transformations>...
-     \
+Usage:
+    transrust [-v | --verbose] [-i \
+     <input>] [-o <output>] [-b <batch>] [-s <buffer>] [-t <threads> | -m] <transformations>...
+    \
      transrust (-h | --help)
-     transrust --transfos
+    transrust --transfos
 
-    Options:
-        -h, --help             \
-     Show this message.
-        -v, --verbose          Shows more information.
-     --transfos                \
+Options:
+    -h, --help             Show \
+     this message.
+    -v, --verbose          Shows more information.
+    --transfos             \
      Shows a list of available transformations.
-        -i, --input <input>    File containing \
-     the graph6 signatures. Uses the standard input if '-'.
-                               \
-     [default: -]
-        -o, --output <output>  File where to write the result. Uses the \
-     standard output if '-'
-                               [default: -]
-        -b, --batch \
+    -i, --input <input>    File containing the \
+     graph6 signatures. Uses the standard input if '-'. [default: -]
+    -o, --output <output>  \
+     File where to write the result. Uses the standard output if '-' [default: -]
+    -b, --batch \
      <batch>    Batch size [default: 1000000]
-        -s, --buffer <buffer>  Size of the buffer \
+    -s, --buffer <buffer>  Size of the buffer \
      [default: 2000000000]
-";
+    -t <threads>           Number of threads to be used for \
+     computation. A value of 0 means using as many threads cores on the machine. [default: 0]";
 
 #[derive(Debug, Deserialize, Clone)]
 struct Args {
@@ -77,6 +75,8 @@ struct Args {
     flag_b: usize,
     flag_s: usize,
     arg_transformations: Vec<String>,
+    flag_t: usize,
+    flag_m: bool,
 }
 
 fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
@@ -135,17 +135,21 @@ fn main() -> Result<(), TransProofError> {
     let batch = args.flag_b;
     let buffer = args.flag_s;
     let transfos = args.arg_transformations;
+    let num_threads = args.flag_t;
 
     // Init filters
-    let contest = |ref x: &Graph| -> Result<String, ()> { as_filter(|_| true, to_g6)(&x) };
+    let deftest = |ref x: &Graph| -> Result<String, ()> { as_filter(|_| true, to_g6)(&x) };
     let ftrs =
-        Arc::new(|ref x: &Graph| -> Result<String, ()> { combine_filters(&contest, trash_node)(&x) });
+        Arc::new(|ref x: &Graph| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
 
     // Init input
     let mut buf: Box<BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
         _ => Box::new(BufReader::new(File::open(filename)?)),
     };
+
+    // Init thread pool
+    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global()?;
 
     // Init comunications with sink thread
     let (sender, receiver): (Sender<String>, Receiver<String>) = channel();
