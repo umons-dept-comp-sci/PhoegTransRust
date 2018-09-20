@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "graph"
 version = "0.1.0"
-source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git#d948c9b398c88d6d64616fbf04594ef3f73ac464"
+source = "git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git?branch=transforesult#74868ce569a338694ced7c71209310de20f95056"
 dependencies = [
  "bit-vec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -343,7 +343,7 @@ version = "0.1.0"
 dependencies = [
  "docopt 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "graph 0.1.0 (git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git)",
+ "graph 0.1.0 (git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git?branch=transforesult)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -422,7 +422,7 @@ dependencies = [
 "checksum docopt 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d8acd393692c503b168471874953a2531df0e9ab77d0b6bbc582395743300a4a"
 "checksum either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3be565ca5c557d7f59e7cfcf1844f9e3033650c929c6566f511e8005f205c1d0"
 "checksum env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)" = "15b0a4d2e39f8420210be8b27eeda28029729e2fd4291019455016c348240c38"
-"checksum graph 0.1.0 (git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git)" = "<none>"
+"checksum graph 0.1.0 (git+https://github.com/umons-dept-comp-sci/PhoegRustGraph.git?branch=transforesult)" = "<none>"
 "checksum humantime 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0484fda3e7007f2a4a0d9c3a703ca38c71c54c55602ce4660c419fd32e188c9e"
 "checksum lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ca488b89a5657b0a2ecd45b95609b3e848cf1755da332a0da46e2b2b1cb371a7"
 "checksum libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)" = "76e3a3ef172f1a0b9a9ff0dd1491ae5e6c948b94479a3021819ba7d860c8645d"

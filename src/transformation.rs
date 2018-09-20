@@ -1,4 +1,4 @@
-use graph::Graph;
+use graph::{transfos::TransfoResult,Graph};
 use graph::transfos;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
@@ -62,7 +62,7 @@ pub fn print_transfos() {
 
 #[derive(Clone)]
 pub enum Transformation<'a> {
-    Single(Arc<Fn(&Graph) -> Vec<Graph> + Send + Sync + 'a>),
+    Single(Arc<Fn(&Graph) -> Vec<TransfoResult> + Send + Sync + 'a>),
     Multiple(Vec<Transformation<'a>>),
 }
 
@@ -74,7 +74,7 @@ impl<'a> Transformation<'a> {
             .map(|x| x.0.clone())
     }
 
-    pub fn apply(&self, g: &Graph) -> Vec<Graph> {
+    pub fn apply(&self, g: &Graph) -> Vec<TransfoResult> {
         match *self {
             Transformation::Multiple(ref l) => {
                 let mut res = Vec::new();
@@ -89,7 +89,7 @@ impl<'a> Transformation<'a> {
 }
 
 impl<'a, F> From<F> for Transformation<'a>
-    where F: Fn(&Graph) -> Vec<Graph> + Send + Sync + 'a
+where F: Fn(&Graph) -> Vec<TransfoResult> + Send + Sync + 'a
 {
     fn from(f: F) -> Self {
         Transformation::Single(Arc::new(f))
@@ -97,7 +97,7 @@ impl<'a, F> From<F> for Transformation<'a>
 }
 
 impl<'a, T> Add<T> for Transformation<'a>
-    where T: Into<Transformation<'a>> + 'a
+where T: Into<Transformation<'a>> + 'a
 {
     type Output = Transformation<'a>;
 
@@ -121,7 +121,7 @@ fn add_other<'a>(ls: &mut Vec<Transformation<'a>>, other: Transformation<'a>) {
 }
 
 impl<'a, T> AddAssign<T> for Transformation<'a>
-    where T: Into<Transformation<'a>> + 'a
+where T: Into<Transformation<'a>> + 'a
 {
     fn add_assign(&mut self, other: T) {
         let other = other.into();

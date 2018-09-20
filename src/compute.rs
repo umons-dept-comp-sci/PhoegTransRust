@@ -1,6 +1,6 @@
 use graph::Graph;
+use graph::transfos::TransfoResult;
 use graph::format::from_g6;
-use graph::nauty::canon_graph;
 use std::fs::File;
 use std::io::{stdout, BufRead, BufWriter, Write};
 use rayon::prelude::*;
@@ -11,15 +11,19 @@ use utils::*;
 use errors::*;
 use transformation::*;
 
-pub fn apply_filters<F>(g: &Graph, ftrs: Arc<F>) -> Result<String, ()>
+pub fn apply_filters<F>(g: &TransfoResult, ftrs: Arc<F>) -> Result<String, ()>
     where F: Fn(&Graph) -> Result<String, ()>
 {
-    ftrs(&g)
+    ftrs(g.get_end())
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<Graph> {
-    trs.apply(&g).iter().map(|x| canon_graph(x).0).collect()
+pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<TransfoResult> {
+    let mut r = trs.apply(&g);
+    for rg in r.iter_mut() {
+        rg.canon();
+    }
+    r
 }
 
 /// Should apply a set of transfomation, filter the graphs and return the result
