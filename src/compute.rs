@@ -12,9 +12,9 @@ use errors::*;
 use transformation::*;
 
 pub fn apply_filters<F>(g: &TransfoResult, ftrs: Arc<F>) -> Result<String, ()>
-    where F: Fn(&Graph) -> Result<String, ()>
+    where F: Fn(&TransfoResult) -> Result<String, ()>
 {
-    ftrs(g.get_end())
+    ftrs(g)
 }
 
 /// Applying transformations to the graph g.
@@ -32,13 +32,13 @@ pub fn handle_graph<T>(g: Graph,
                        trsf: &Transformation,
                        ftrs: Arc<T>)
                        -> Result<(), TransProofError>
-    where T: Fn(&Graph) -> Result<String, ()>
+    where T: Fn(&TransfoResult) -> Result<String, ()>
 {
     let r = apply_transfos(&g, trsf);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if s.is_ok() {
-            t.send(format!("{},{}\n", g, s.unwrap()))?;
+            t.send(format!("{}\n", s.unwrap()))?;
         }
     }
     Ok(())
@@ -50,7 +50,7 @@ pub fn handle_graphs<T>(v: Vec<Graph>,
                         trsf: &Transformation,
                         ftrs: Arc<T>)
                         -> Result<(), TransProofError>
-    where T: Fn(&Graph) -> Result<String, ()> + Send + Sync
+    where T: Fn(&TransfoResult) -> Result<String, ()> + Send + Sync
 {
     v.into_par_iter()
         .try_for_each_with(t, |s, x| handle_graph(x, s, &trsf, ftrs.clone()))?;

@@ -14,8 +14,7 @@ mod compute;
 mod errors;
 mod transformation;
 
-use graph::Graph;
-use graph::format::to_g6;
+use graph::transfos::TransfoResult;
 // use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
@@ -138,9 +137,9 @@ fn main() -> Result<(), TransProofError> {
     let num_threads = args.flag_t;
 
     // Init filters
-    let deftest = |ref x: &Graph| -> Result<String, ()> { as_filter(|_| true, to_g6)(&x) };
+    let deftest = |ref x: &TransfoResult| -> Result<String, ()> { as_filter(|_| true, |x| format!("{}",x))(&x) };
     let ftrs =
-        Arc::new(|ref x: &Graph| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
+        Arc::new(|ref x: &TransfoResult| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
 
     // Init input
     let mut buf: Box<BufRead> = match filename.as_str() {
