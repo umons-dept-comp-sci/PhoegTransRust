@@ -4,7 +4,7 @@ use graph::format::from_g6;
 use std::fs::File;
 use std::io::{stdout, BufRead, BufWriter, Write};
 use rayon::prelude::*;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::Instant;
 use std::sync::Arc;
 use utils::*;
@@ -28,7 +28,7 @@ pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<TransfoResult> {
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graph<T>(g: Graph,
-                       t: &mut Sender<String>,
+                       t: &mut SyncSender<String>,
                        trsf: &Transformation,
                        ftrs: Arc<T>)
                        -> Result<(), TransProofError>
@@ -46,7 +46,7 @@ pub fn handle_graph<T>(g: Graph,
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graphs<T>(v: Vec<Graph>,
-                        t: Sender<String>,
+                        t: SyncSender<String>,
                         trsf: &Transformation,
                         ftrs: Arc<T>)
                         -> Result<(), TransProofError>

@@ -18,7 +18,7 @@ use graph::transfos::TransfoResult;
 // use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
 use std::sync::Arc;
 use docopt::Docopt;
@@ -151,7 +151,7 @@ fn main() -> Result<(), TransProofError> {
     rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global()?;
 
     // Init comunications with sink thread
-    let (sender, receiver): (Sender<String>, Receiver<String>) = channel();
+    let (sender, receiver): (SyncSender<String>, Receiver<String>) = sync_channel(2000);
     let builder = thread::Builder::new();
     let whandle = builder.spawn(move || output(receiver, outfilename, buffer))?;
 
