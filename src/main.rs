@@ -18,7 +18,7 @@ use graph::transfos::TransfoResult;
 // use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
 use std::sync::Arc;
 use docopt::Docopt;
@@ -34,36 +34,32 @@ use transformation::*;
 // t <transformation>    The transformations to computes for the \
 // graphs.
 const USAGE: &str =
-    "
-Transrust is a tool to compute the results of different transformations on a
-given set of \
-     graphs. These graphs have to be given in graph6 format from the
-input (one signature per \
-     line) and the result is outputed in csv format.
+"
+Transrust is a tool to compute the results of different transformations on a \
+given set of graphs. These graphs have to be given in graph6 format from the input (one signature \
+per line) and the result is outputed in csv format.
 
 Usage:
-    transrust [-v | --verbose] [-i \
-     <input>] [-o <output>] [-b <batch>] [-s <buffer>] [-t <threads> | -m] <transformations>...
-    \
-     transrust (-h | --help)
+    transrust [-v | --verbose] [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] [-t \
+    <threads>] [-c <channel>] <transformations>...
+    transrust (-h | --help)
     transrust --transfos
 
 Options:
-    -h, --help             Show \
-     this message.
+    -h, --help             Show this message.
     -v, --verbose          Shows more information.
-    --transfos             \
-     Shows a list of available transformations.
-    -i, --input <input>    File containing the \
-     graph6 signatures. Uses the standard input if '-'. [default: -]
-    -o, --output <output>  \
-     File where to write the result. Uses the standard output if '-' [default: -]
-    -b, --batch \
-     <batch>    Batch size [default: 1000000]
-    -s, --buffer <buffer>  Size of the buffer \
-     [default: 2000000000]
-    -t <threads>           Number of threads to be used for \
-     computation. A value of 0 means using as many threads cores on the machine. [default: 0]";
+    --transfos             Shows a list of available transformations.
+    -i, --input <input>    File containing the graph6 signatures. Uses the standard input if '-'. \
+        [default: -]
+    -o, --output <output>  File where to write the result. Uses the standard output if '-'. \
+        [default: -]
+    -b, --batch <batch>    Batch size [default: 1000000]
+    -s, --buffer <buffer>  Size of the buffer [default: 2000000000]
+    -t <threads>           Number of threads to be used for computation. A value of 0 means using \
+        as many threads cores on the machine. [default: 0]
+    -c <channel>           Size of the buffer to use for each threads (in number of messages). If \
+        the size is 0, the buffer is unlimited. Use this if you have memory issues even while \
+        setting a smaller output buffer and batch size. [default: 0]";
 
 #[derive(Debug, Deserialize, Clone)]
 struct Args {
@@ -75,7 +71,7 @@ struct Args {
     flag_s: usize,
     arg_transformations: Vec<String>,
     flag_t: usize,
-    flag_m: bool,
+    flag_c: usize,
 }
 
 fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
@@ -135,6 +131,7 @@ fn main() -> Result<(), TransProofError> {
     let buffer = args.flag_s;
     let transfos = args.arg_transformations;
     let num_threads = args.flag_t;
+    let channel_size = args.flag_t;
 
     // Init filters
     let deftest = |ref x: &TransfoResult| -> Result<String, ()> { as_filter(|_| true, |x| format!("{}",x))(&x) };
@@ -151,7 +148,18 @@ fn main() -> Result<(), TransProofError> {
     rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global()?;
 
     // Init comunications with sink thread
-    let (sender, receiver): (SyncSender<String>, Receiver<String>) = sync_channel(2000);
+    let sender;
+    let receiver;
+    if channel_size == 0 {
+        let chan = channel::<String>();
+        sender = SenderVariant::from(chan.0);
+        receiver = chan.1;
+    }
+    else {
+        let chan = sync_channel::<String>(channel_size);
+        sender = SenderVariant::from(chan.0);
+        receiver = chan.1;
+    }
     let builder = thread::Builder::new();
     let whandle = builder.spawn(move || output(receiver, outfilename, buffer))?;
 

@@ -4,9 +4,10 @@ use graph::format::from_g6;
 use std::fs::File;
 use std::io::{stdout, BufRead, BufWriter, Write};
 use rayon::prelude::*;
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, SyncSender, Sender, SendError};
 use std::time::Instant;
 use std::sync::Arc;
+use std::convert::From;
 use utils::*;
 use errors::*;
 use transformation::*;
@@ -28,7 +29,7 @@ pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<TransfoResult> {
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graph<T>(g: Graph,
-                       t: &mut SyncSender<String>,
+                       t: &mut SenderVariant<String>,
                        trsf: &Transformation,
                        ftrs: Arc<T>)
                        -> Result<(), TransProofError>
@@ -46,7 +47,7 @@ pub fn handle_graph<T>(g: Graph,
 
 /// Should apply a set of transfomation, filter the graphs and return the result
 pub fn handle_graphs<T>(v: Vec<Graph>,
-                        t: SyncSender<String>,
+                        t: SenderVariant<String>,
                         trsf: &Transformation,
                         ftrs: Arc<T>)
                         -> Result<(), TransProofError>
@@ -107,4 +108,39 @@ pub fn output(receiver: Receiver<String>,
           millis,
           plural(millis));
     Ok(())
+}
+
+#[derive(Clone)]
+pub enum SenderVariant<T>
+    where T: Send
+{
+    UnlimitedSender(Sender<T>),
+    LimitedSender(SyncSender<T>),
+}
+
+impl<T> SenderVariant<T>
+    where T: Send
+{
+    fn send(&self, t: T) -> Result<(), SendError<T>> {
+        match self {
+            SenderVariant::UnlimitedSender(s) => s.send(t),
+            SenderVariant::LimitedSender(s) => s.send(t),
+        }
+    }
+}
+
+impl<T> From<Sender<T>> for SenderVariant<T>
+    where T: Send
+{
+    fn from(sender: Sender<T>) -> Self {
+        SenderVariant::UnlimitedSender(sender)
+    }
+}
+
+impl<T> From<SyncSender<T>> for SenderVariant<T>
+    where T: Send
+{
+    fn from(sender: SyncSender<T>) -> Self {
+        SenderVariant::LimitedSender(sender)
+    }
 }
