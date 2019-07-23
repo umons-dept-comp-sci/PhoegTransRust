@@ -1,5 +1,5 @@
 use graph::Graph;
-use graph::transfos::TransfoResult;
+use graph::transfo_result::GraphTransformation;
 use graph::format::from_g6;
 use std::fs::OpenOptions;
 use std::io::{stdout, BufRead, BufWriter, Write};
@@ -12,14 +12,14 @@ use utils::*;
 use errors::*;
 use transformation::*;
 
-pub fn apply_filters<F>(g: &TransfoResult, ftrs: Arc<F>) -> Result<String, ()>
-    where F: Fn(&TransfoResult) -> Result<String, ()>
+pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
+    where F: Fn(&GraphTransformation) -> Result<String, ()>
 {
     ftrs(g)
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<TransfoResult> {
+pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<GraphTransformation> {
     let mut r = trs.apply(&g);
     for rg in r.iter_mut() {
         rg.canon();
@@ -33,7 +33,7 @@ pub fn handle_graph<T>(g: Graph,
                        trsf: &Transformation,
                        ftrs: Arc<T>)
                        -> Result<(), TransProofError>
-    where T: Fn(&TransfoResult) -> Result<String, ()>
+    where T: Fn(&GraphTransformation) -> Result<String, ()>
 {
     let r = apply_transfos(&g, trsf);
     for h in r {
@@ -51,7 +51,7 @@ pub fn handle_graphs<T>(v: Vec<Graph>,
                         trsf: &Transformation,
                         ftrs: Arc<T>)
                         -> Result<(), TransProofError>
-    where T: Fn(&TransfoResult) -> Result<String, ()> + Send + Sync
+    where T: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync
 {
     v.into_par_iter()
         .try_for_each_with(t, |s, x| handle_graph(x, s, &trsf, ftrs.clone()))?;
