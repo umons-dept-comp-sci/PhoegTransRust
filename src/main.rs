@@ -35,13 +35,12 @@ use transformation::*;
 // graphs.
 const USAGE: &str =
 "
-Transrust is a tool to compute the results of different transformations on a \
-given set of graphs. These graphs have to be given in graph6 format from the input (one signature \
-per line) and the result is outputed in csv format.
+Transrust is a tool to compute the results of different transformations on a given set of graphs.
+These graphs have to be given in graph6 format from the input (one signature per line) and the
+result is outputed in csv format.
 
 Usage:
-    transrust [-v | --verbose] [-i <input>] [-o <output>] [-b <batch>] [-s <buffer>] [-t \
-    <threads>] [-c <channel>] <transformations>...
+    transrust [options] <transformations>...
     transrust (-h | --help)
     transrust --transfos
 
@@ -49,17 +48,19 @@ Options:
     -h, --help             Show this message.
     -v, --verbose          Shows more information.
     --transfos             Shows a list of available transformations.
-    -i, --input <input>    File containing the graph6 signatures. Uses the standard input if '-'. \
-        [default: -]
-    -o, --output <output>  File where to write the result. Uses the standard output if '-'. \
-        [default: -]
+    -i, --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
+                           [default: -]
+    -o, --output <output>  File where to write the result. Uses the standard output if '-'.
+                           [default: -]
     -b, --batch <batch>    Batch size [default: 1000000]
     -s, --buffer <buffer>  Size of the buffer [default: 2000000000]
-    -t <threads>           Number of threads to be used for computation. A value of 0 means using \
-        as many threads cores on the machine. [default: 0]
-    -c <channel>           Size of the buffer to use for each threads (in number of messages). If \
-        the size is 0, the buffer is unlimited. Use this if you have memory issues even while \
-        setting a smaller output buffer and batch size. [default: 0]";
+    -t <threads>           Number of threads to be used for computation. A value of 0 means using
+                           as many threads cores on the machine. [default: 0]
+    -c <channel>           Size of the buffer to use for each threads (in number of messages). If
+                           the size is 0, the buffer is unlimited. Use this if you have memory
+                           issues even while setting a smaller output buffer and batch size.
+                           [default: 0]
+    -a, --append           Does not overwrite output file but appends results instead.";
 
 #[derive(Debug, Deserialize, Clone)]
 struct Args {
@@ -72,6 +73,7 @@ struct Args {
     arg_transformations: Vec<String>,
     flag_t: usize,
     flag_c: usize,
+    flag_append: bool,
 }
 
 fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
@@ -131,7 +133,8 @@ fn main() -> Result<(), TransProofError> {
     let buffer = args.flag_s;
     let transfos = args.arg_transformations;
     let num_threads = args.flag_t;
-    let channel_size = args.flag_t;
+    let channel_size = args.flag_c;
+    let append = args.flag_append;
 
     // Init filters
     let deftest = |ref x: &TransfoResult| -> Result<String, ()> { as_filter(|_| true, |x| format!("{}",x))(&x) };
@@ -161,7 +164,7 @@ fn main() -> Result<(), TransProofError> {
         receiver = chan.1;
     }
     let builder = thread::Builder::new();
-    let whandle = builder.spawn(move || output(receiver, outfilename, buffer))?;
+    let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append))?;
 
     // Init transformations
     let trs = init_transfo(&transfos);
