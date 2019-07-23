@@ -1,7 +1,7 @@
 use graph::Graph;
 use graph::transfos::TransfoResult;
 use graph::format::from_g6;
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{stdout, BufRead, BufWriter, Write};
 use rayon::prelude::*;
 use std::sync::mpsc::{Receiver, SyncSender, Sender, SendError};
@@ -86,11 +86,18 @@ pub fn read_graphs<F>(rdr: &mut F, batchsize: usize) -> Vec<Graph>
 
 pub fn output(receiver: Receiver<String>,
               filename: String,
-              buffer: usize)
+              buffer: usize,
+              append: bool)
               -> Result<(), TransProofError> {
     let mut bufout: Box<Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
-        _ => Box::new(BufWriter::with_capacity(buffer, File::create(filename)?)),
+        _ => {
+            Box::new(BufWriter::with_capacity(buffer,
+                                              OpenOptions::new().write(true)
+                                                  .append(append)
+                                                  .create(true)
+                                                  .open(filename)?))
+        }
     };
     let start = Instant::now();
     let mut i = 0;

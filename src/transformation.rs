@@ -28,7 +28,7 @@ lazy_static! {
         addtransfo!(m, "move_distinct",move_distinct,"Moves an edge ab between to distict vertices c and d.");
         addtransfo!(m, "two_opt",two_opt,"Switch two edges.");
         addtransfo!(m, "short_cut",shortcut,"Adds a sort cut between two vertices a and c at distance 2.");
-        addtransfo!(m, "detour",detour,"Replace an edge by a path of lenght 2.");
+        addtransfo!(m, "detour",detour,"Replace an edge by a path of length 2.");
         m
     };
 
