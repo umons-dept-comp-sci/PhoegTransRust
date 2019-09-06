@@ -62,7 +62,7 @@ pub fn print_transfos() {
 
 #[derive(Clone)]
 pub enum Transformation<'a> {
-    Single(Arc<Fn(&Graph) -> Vec<GraphTransformation> + Send + Sync + 'a>),
+    Single(Arc<dyn Fn(&Graph) -> Vec<GraphTransformation> + Send + Sync + 'a>),
     Multiple(Vec<Transformation<'a>>),
 }
 

@@ -142,7 +142,7 @@ fn main() -> Result<(), TransProofError> {
         Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
 
     // Init input
-    let mut buf: Box<BufRead> = match filename.as_str() {
+    let mut buf: Box<dyn BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
         _ => Box::new(BufReader::new(File::open(filename)?)),
     };

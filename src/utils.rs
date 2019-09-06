@@ -1,5 +1,6 @@
 use graph::transfo_result::GraphTransformation;
 
+/// Returns "s" if i is different from 1 and an empty string otherwise.
 pub fn plural(i: usize) -> String {
     if i != 1 {
         String::from("s")
@@ -8,14 +9,14 @@ pub fn plural(i: usize) -> String {
     }
 }
 
-pub fn as_filter<'a, F, S>(filter: F, name: S) -> Box<Fn(&GraphTransformation) -> Result<String, ()> + 'a>
+pub fn as_filter<'a, F, S>(filter: F, name: S) -> Box<dyn Fn(&GraphTransformation) -> Result<String, ()> + 'a>
     where F: Fn(&GraphTransformation) -> bool + 'a,
           S: Fn(&GraphTransformation) -> String + 'a
 {
     Box::new(move |x| if filter(x) { Ok(name(x)) } else { Err(()) })
 }
 
-pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<Fn(&GraphTransformation) -> Result<String, ()> + 'a>
+pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<dyn Fn(&GraphTransformation) -> Result<String, ()> + 'a>
     where F: Fn(&GraphTransformation) -> Result<String, ()> + 'a,
           G: Fn(&GraphTransformation) -> Result<String, ()> + 'a
 {

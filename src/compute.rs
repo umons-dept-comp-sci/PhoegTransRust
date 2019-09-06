@@ -89,7 +89,7 @@ pub fn output(receiver: Receiver<String>,
               buffer: usize,
               append: bool)
               -> Result<(), TransProofError> {
-    let mut bufout: Box<Write> = match filename.as_str() {
+    let mut bufout: Box<dyn Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
         _ => {
             Box::new(BufWriter::with_capacity(buffer,
