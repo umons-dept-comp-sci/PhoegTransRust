@@ -14,7 +14,7 @@ mod compute;
 mod errors;
 mod transformation;
 
-use graph::transfos::TransfoResult;
+use graph::transfo_result::GraphTransformation;
 // use graph::invariant;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
@@ -137,12 +137,12 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
 
     // Init filters
-    let deftest = |ref x: &TransfoResult| -> Result<String, ()> { as_filter(|_| true, |x| format!("{}",x))(&x) };
+    let deftest = |ref x: &GraphTransformation| -> Result<String, ()> { as_filter(|_| true, |x| x.tocsv())(&x) };
     let ftrs =
-        Arc::new(|ref x: &TransfoResult| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
+        Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
 
     // Init input
-    let mut buf: Box<BufRead> = match filename.as_str() {
+    let mut buf: Box<dyn BufRead> = match filename.as_str() {
         "-" => Box::new(BufReader::new(stdin())),
         _ => Box::new(BufReader::new(File::open(filename)?)),
     };

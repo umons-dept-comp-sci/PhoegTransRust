@@ -9,7 +9,7 @@ use rayon;
 pub enum TransProofError {
     Io(io::Error),
     Send(mpsc::SendError<String>),
-    Thread(Box<Any + Send>),
+    Thread(Box<dyn Any + Send>),
     ThreadPool(rayon::ThreadPoolBuildError),
 }
 
@@ -34,7 +34,7 @@ impl error::Error for TransProofError {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             TransProofError::Io(ref e) => Some(e),
             TransProofError::Send(ref e) => Some(e),
@@ -62,8 +62,8 @@ impl From<rayon::ThreadPoolBuildError> for TransProofError {
     }
 }
 
-impl From<Box<Any + Send>> for TransProofError {
-    fn from(e: Box<Any + Send>) -> TransProofError {
+impl From<Box<dyn Any + Send>> for TransProofError {
+    fn from(e: Box<dyn Any + Send>) -> TransProofError {
         TransProofError::Thread(e)
     }
 }

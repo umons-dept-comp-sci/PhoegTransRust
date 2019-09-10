@@ -1,4 +1,4 @@
-use graph::transfos::TransfoResult;
+use graph::transfo_result::GraphTransformation;
 
 pub fn plural(i: usize) -> String {
     if i != 1 {
@@ -8,16 +8,16 @@ pub fn plural(i: usize) -> String {
     }
 }
 
-pub fn as_filter<'a, F, S>(filter: F, name: S) -> Box<Fn(&TransfoResult) -> Result<String, ()> + 'a>
-    where F: Fn(&TransfoResult) -> bool + 'a,
-          S: Fn(&TransfoResult) -> String + 'a
+pub fn as_filter<'a, F, S>(filter: F, name: S) -> Box<dyn Fn(&GraphTransformation) -> Result<String, ()> + 'a>
+    where F: Fn(&GraphTransformation) -> bool + 'a,
+          S: Fn(&GraphTransformation) -> String + 'a
 {
     Box::new(move |x| if filter(x) { Ok(name(x)) } else { Err(()) })
 }
 
-pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<Fn(&TransfoResult) -> Result<String, ()> + 'a>
-    where F: Fn(&TransfoResult) -> Result<String, ()> + 'a,
-          G: Fn(&TransfoResult) -> Result<String, ()> + 'a
+pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<dyn Fn(&GraphTransformation) -> Result<String, ()> + 'a>
+    where F: Fn(&GraphTransformation) -> Result<String, ()> + 'a,
+          G: Fn(&GraphTransformation) -> Result<String, ()> + 'a
 {
     Box::new(move |x| match f(x) {
         Err(_) => g(x),
@@ -25,6 +25,6 @@ pub fn combine_filters<'a, F, G>(f: F, g: G) -> Box<Fn(&TransfoResult) -> Result
     })
 }
 
-pub fn trash_node(_: &TransfoResult) -> Result<String, ()> {
+pub fn trash_node(_: &GraphTransformation) -> Result<String, ()> {
     Ok("TRASH".to_string())
 }
