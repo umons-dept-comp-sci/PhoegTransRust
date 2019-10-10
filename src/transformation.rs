@@ -29,6 +29,9 @@ lazy_static! {
         addtransfo!(m, "two_opt",two_opt,"Switch two edges.");
         addtransfo!(m, "short_cut",shortcut,"Adds a sort cut between two vertices a and c at distance 2.");
         addtransfo!(m, "detour",detour,"Replace an edge by a path of length 2.");
+        addtransfo!(m, "disco_twins",disco_twins,"Disconnect twin vertices");
+        addtransfo!(m, "isolate_twin",isolate_twin,"Isolate a vertex having a twin");
+        addtransfo!(m, "isolate_incl",isolate_incl,"Isolate a vertex having its neighborhood included in the neighborhoord of another vertex");
         m
     };
 

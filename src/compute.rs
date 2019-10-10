@@ -2,7 +2,6 @@ use errors::*;
 use graph::Graph;
 use graph::format::from_g6;
 use graph::transfo_result::GraphTransformation;
-use graph::Graph;
 use rayon::prelude::*;
 use std::convert::From;
 use std::fs::OpenOptions;
