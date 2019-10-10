@@ -1,4 +1,4 @@
-use graph::{transfo_result::GraphTransformation,Graph};
+use graph::{transfo_result::GraphTransformation,GraphNauty};
 use graph::transfos;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
@@ -65,7 +65,7 @@ pub fn print_transfos() {
 
 #[derive(Clone)]
 pub enum Transformation<'a> {
-    Single(Arc<dyn Fn(&Graph) -> Vec<GraphTransformation> + Send + Sync + 'a>),
+    Single(Arc<dyn Fn(&GraphNauty) -> Vec<GraphTransformation> + Send + Sync + 'a>),
     Multiple(Vec<Transformation<'a>>),
 }
 
@@ -77,7 +77,7 @@ impl<'a> Transformation<'a> {
             .map(|x| x.0.clone())
     }
 
-    pub fn apply(&self, g: &Graph) -> Vec<GraphTransformation> {
+    pub fn apply(&self, g: &GraphNauty) -> Vec<GraphTransformation> {
         match *self {
             Transformation::Multiple(ref l) => {
                 let mut res = Vec::new();
@@ -92,7 +92,7 @@ impl<'a> Transformation<'a> {
 }
 
 impl<'a, F> From<F> for Transformation<'a>
-where F: Fn(&Graph) -> Vec<GraphTransformation> + Send + Sync + 'a
+where F: Fn(&GraphNauty) -> Vec<GraphTransformation> + Send + Sync + 'a
 {
     fn from(f: F) -> Self {
         Transformation::Single(Arc::new(f))

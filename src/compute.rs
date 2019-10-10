@@ -1,5 +1,5 @@
 use errors::*;
-use graph::Graph;
+use graph::GraphNauty;
 use graph::format::from_g6;
 use graph::transfo_result::GraphTransformation;
 use rayon::prelude::*;
@@ -20,7 +20,7 @@ where
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<GraphTransformation> {
+pub fn apply_transfos(g: &GraphNauty, trs: &Transformation) -> Vec<GraphTransformation> {
     let mut r = trs.apply(&g);
     for rg in r.iter_mut() {
         rg.canon();
@@ -30,7 +30,7 @@ pub fn apply_transfos(g: &Graph, trs: &Transformation) -> Vec<GraphTransformatio
 
 /// Should apply a set of transformations, filter the graphs and return the result
 pub fn handle_graph<T>(
-    g: Graph,
+    g: GraphNauty,
     t: &mut SenderVariant<String>,
     trsf: &Transformation,
     ftrs: Arc<T>,
@@ -50,7 +50,7 @@ where
 
 /// Should apply a set of transformations, filter the graphs and return the result
 pub fn handle_graphs<T>(
-    v: Vec<Graph>,
+    v: Vec<GraphNauty>,
     t: SenderVariant<String>,
     trsf: &Transformation,
     ftrs: Arc<T>,
@@ -65,7 +65,7 @@ where
 
 /// Read files of graphs
 /// (file of sigs)
-pub fn read_graphs<F>(rdr: &mut F, batchsize: usize) -> Vec<Graph>
+pub fn read_graphs<F>(rdr: &mut F, batchsize: usize) -> Vec<GraphNauty>
 where
     F: BufRead,
 {
