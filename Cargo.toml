@@ -1,13 +1,12 @@
 [package]
 name = "transrust"
-version = "0.1.0"
+version = "1.0.0-alpha"
 authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
 
 [dependencies]
 
 rayon = "1.0"
-graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git", branch="trait"}
-#graph = {path="../graph"}
+graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
 time = "0.1"
 docopt = "0.8"
 serde="1.0"
