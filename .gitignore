@@ -3,3 +3,6 @@
 *.csv
 *.g6
 Cargo.lock
+data/
+matching-parameterized-subgraphs
+rename.sh
