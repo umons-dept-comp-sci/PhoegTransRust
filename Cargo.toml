@@ -2,6 +2,7 @@
 name = "transrust"
 version = "1.0.0-alpha"
 authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
+edition="2018"
 
 [dependencies]
 
