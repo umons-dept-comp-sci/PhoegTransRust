@@ -66,7 +66,7 @@ struct Args {
     flag_append: bool,
 }
 
-fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
+fn init_transfo(lst: &[String]) -> Option<Transformation> {
     if lst.is_empty() {
         return None;
     }
@@ -81,9 +81,9 @@ fn init_transfo(lst: &Vec<String>) -> Option<Transformation> {
         let mut ttrs;
         while i < lst.len() {
             ttrs = Transformation::from_name(&lst[i]);
-            if ttrs.is_some() {
+            if let Some(ttrs_val) = ttrs {
                 match transfo.as_mut() {
-                    Some(t) => *t += ttrs.unwrap(),
+                    Some(t) => *t += ttrs_val,
                     None => panic!("Should not happen."),
                 }
             } else {

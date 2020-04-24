@@ -42,8 +42,8 @@ where
     let r = apply_transfos(&g, trsf);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
-        if s.is_ok() {
-            t.send(format!("{}\n", s.unwrap()))?;
+        if let Ok(res) = s {
+            t.send(format!("{}\n", res))?;
         }
     }
     Ok(())
@@ -110,7 +110,7 @@ pub fn output(
     let mut i = 0;
     for t in receiver.iter() {
         i += 1;
-        bufout.write(&t.into_bytes())?;
+        bufout.write_all(&t.into_bytes())?;
     }
     let duration = start.elapsed();
     info!("Done : {} transformation{}", i, plural(i));
