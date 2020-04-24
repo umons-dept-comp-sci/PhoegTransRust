@@ -1,7 +1,10 @@
-use errors::*;
-use graph::GraphNauty;
+use crate::errors::*;
+use crate::transformation::*;
+use crate::utils::plural;
 use graph::format::from_g6;
 use graph::transfo_result::GraphTransformation;
+use graph::GraphNauty;
+use log::{info, warn};
 use rayon::prelude::*;
 use std::convert::From;
 use std::fs::OpenOptions;
@@ -9,8 +12,6 @@ use std::io::{stdout, BufRead, BufWriter, Write};
 use std::sync::mpsc::{Receiver, SendError, Sender, SyncSender};
 use std::sync::Arc;
 use std::time::Instant;
-use transformation::*;
-use utils::*;
 
 pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
 where

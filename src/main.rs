@@ -1,40 +1,30 @@
-extern crate docopt;
-extern crate graph;
-extern crate rayon;
-extern crate env_logger;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate lazy_static;
-
-mod utils;
 mod compute;
 mod errors;
 mod transformation;
+mod utils;
 
 use graph::transfo_result::GraphTransformation;
 // use graph::invariant;
+use docopt::Docopt;
+use log::{debug, info, warn, error};
+use serde::Deserialize;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
 use std::sync::mpsc::{channel, sync_channel};
-use std::thread;
 use std::sync::Arc;
-use docopt::Docopt;
+use std::thread;
 
-use utils::*;
 use compute::*;
 use errors::*;
 use transformation::*;
+use utils::*;
 
 // (-f <filter>)...
 // -f <filter>            The filters \
 // to apply to the results of the transformations.
 // t <transformation>    The transformations to computes for the \
 // graphs.
-const USAGE: &str =
-"
+const USAGE: &str = "
 Transrust is a tool to compute the results of different transformations on a given set of graphs.
 These graphs have to be given in graph6 format from the input (one signature per line) and the
 result is outputed in csv format.
@@ -137,9 +127,12 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
 
     // Init filters
-    let deftest = |ref x: &GraphTransformation| -> Result<String, ()> { as_filter(|_| true, |x| x.tocsv())(&x) };
-    let ftrs =
-        Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> { combine_filters(&deftest, trash_node)(&x) });
+    let deftest = |ref x: &GraphTransformation| -> Result<String, ()> {
+        as_filter(|_| true, |x| x.tocsv())(&x)
+    };
+    let ftrs = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
+        combine_filters(&deftest, trash_node)(&x)
+    });
 
     // Init input
     let mut buf: Box<dyn BufRead> = match filename.as_str() {
@@ -148,7 +141,9 @@ fn main() -> Result<(), TransProofError> {
     };
 
     // Init thread pool
-    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global()?;
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build_global()?;
 
     // Init comunications with sink thread
     let sender;
@@ -157,8 +152,7 @@ fn main() -> Result<(), TransProofError> {
         let chan = channel::<String>();
         sender = SenderVariant::from(chan.0);
         receiver = chan.1;
-    }
-    else {
+    } else {
         let chan = sync_channel::<String>(channel_size);
         sender = SenderVariant::from(chan.0);
         receiver = chan.1;

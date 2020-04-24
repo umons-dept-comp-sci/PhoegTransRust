@@ -3,6 +3,7 @@ use graph::transfos;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::collections::HashMap;
+use lazy_static::lazy_static;
 
 macro_rules! addtransfo {
     ( $m:ident, $n:expr, $f:ident, $d:expr ) => {
