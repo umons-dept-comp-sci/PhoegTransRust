@@ -11,8 +11,7 @@ graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
 time = "0.1"
 docopt = "0.8"
 serde={version="1.0", features=["derive"]}
-#serde_derive="1.0"
-#rustc-serialize = "0.3"
 log = "0.4"
 env_logger = "0.5"
 lazy_static = "1.1"
+thiserror = "1.0"

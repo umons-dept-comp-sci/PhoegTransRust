@@ -186,7 +186,7 @@ fn main() -> Result<(), TransProofError> {
         }
     }
     drop(sender);
-    whandle.join()??;
+    whandle.join().map_err(|x| TransProofError::Thread(x))??;
     res?;
     Ok(())
 }
