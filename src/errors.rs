@@ -1,7 +1,7 @@
+use rayon;
+use std::any::Any;
 use std::io;
 use std::sync::mpsc;
-use std::any::Any;
-use rayon;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -14,4 +14,6 @@ pub enum TransProofError {
     Thread(Box<dyn Any + Send>),
     #[error(transparent)]
     ThreadPool(#[from] rayon::ThreadPoolBuildError),
+    #[error("Unknown transformation: {0}.")]
+    UnknownTransformation(String),
 }

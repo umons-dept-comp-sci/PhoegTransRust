@@ -21,7 +21,10 @@ where
 }
 
 /// Applying transformations to the graph g.
-pub fn apply_transfos(g: &GraphNauty, trs: &Transformation) -> Vec<GraphTransformation> {
+pub fn apply_transfos<T>(g: &GraphNauty, trs: &T) -> Vec<GraphTransformation>
+where
+    T: Transformation
+{
     let mut r = trs.apply(&g);
     for rg in r.iter_mut() {
         rg.canon();
@@ -30,14 +33,15 @@ pub fn apply_transfos(g: &GraphNauty, trs: &Transformation) -> Vec<GraphTransfor
 }
 
 /// Should apply a set of transformations, filter the graphs and return the result
-pub fn handle_graph<T>(
+pub fn handle_graph<T, F>(
     g: GraphNauty,
     t: &mut SenderVariant<String>,
-    trsf: &Transformation,
-    ftrs: Arc<T>,
+    trsf: &T,
+    ftrs: Arc<F>,
 ) -> Result<(), TransProofError>
 where
-    T: Fn(&GraphTransformation) -> Result<String, ()>,
+    T: Transformation,
+    F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
     let r = apply_transfos(&g, trsf);
     for h in r {
@@ -50,17 +54,18 @@ where
 }
 
 /// Should apply a set of transformations, filter the graphs and return the result
-pub fn handle_graphs<T>(
+pub fn handle_graphs<T, F>(
     v: Vec<GraphNauty>,
     t: SenderVariant<String>,
-    trsf: &Transformation,
-    ftrs: Arc<T>,
+    trsf: &T,
+    ftrs: Arc<F>,
 ) -> Result<(), TransProofError>
 where
-    T: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
+    T: Transformation,
+    F: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
 {
     v.into_par_iter()
-        .try_for_each_with(t, |s, x| handle_graph(x, s, &trsf, ftrs.clone()))?;
+        .try_for_each_with(t, |s, x| handle_graph(x, s, trsf, ftrs.clone()))?;
     Ok(())
 }
 

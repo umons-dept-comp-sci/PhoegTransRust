@@ -13,6 +13,7 @@ use std::io::{stdin, BufRead, BufReader};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
+use std::convert::TryInto;
 
 use compute::*;
 use errors::*;
@@ -66,33 +67,40 @@ struct Args {
     flag_append: bool,
 }
 
-fn init_transfo(lst: &[String]) -> Option<Transformation> {
-    if lst.is_empty() {
-        return None;
-    }
-    let mut transfo = Transformation::from_name(&lst[0]);
-    let mut i = 1;
-    while transfo.is_none() && i < lst.len() {
-        warn!("Unknown transformation : {}.", lst[i - 1]);
-        transfo = Transformation::from_name(&lst[i]);
-        i += 1;
-    }
-    if transfo.is_some() {
-        let mut ttrs;
-        while i < lst.len() {
-            ttrs = Transformation::from_name(&lst[i]);
-            if let Some(ttrs_val) = ttrs {
-                match transfo.as_mut() {
-                    Some(t) => *t += ttrs_val,
-                    None => panic!("Should not happen."),
-                }
-            } else {
-                warn!("Unknown transformation : {}", lst[i]);
-            }
-            i += 1;
+fn init_transfo(lst: &[String]) -> TransfoVec {
+    lst.iter().map(|x| x.as_str().try_into()).inspect(|res| {
+        if let Err(e) = res {
+            warn!("{}", e);
         }
-    }
-    transfo
+    })
+    .filter_map(Result::ok)
+    .collect()
+    //if lst.is_empty() {
+        //return Vec::new();
+    //}
+    //let mut transfo = Transformation::from_name(&lst[0]);
+    //let mut i = 1;
+    //while transfo.is_none() && i < lst.len() {
+        //warn!("Unknown transformation : {}.", lst[i - 1]);
+        //transfo = Transformation::from_name(&lst[i]);
+        //i += 1;
+    //}
+    //if transfo.is_some() {
+        //let mut ttrs;
+        //while i < lst.len() {
+            //ttrs = Transformation::from_name(&lst[i]);
+            //if let Some(ttrs_val) = ttrs {
+                //match transfo.as_mut() {
+                    //Some(t) => *t += ttrs_val,
+                    //None => panic!("Should not happen."),
+                //}
+            //} else {
+                //warn!("Unknown transformation : {}", lst[i]);
+            //}
+            //i += 1;
+        //}
+    //}
+    //transfo
 }
 
 fn main() -> Result<(), TransProofError> {
@@ -162,11 +170,10 @@ fn main() -> Result<(), TransProofError> {
 
     // Init transformations
     let trs = init_transfo(&transfos);
-    if trs.is_none() {
+    if trs.is_empty() {
         error!("No transformation found.");
         panic!("No transformation found.");
     }
-    let trs = trs.unwrap();
 
     let mut s = 1;
     let mut total = 0;
