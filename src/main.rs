@@ -32,7 +32,7 @@ These graphs have to be given in graph6 format from the input (one signature per
 result is outputed in csv format.
 
 Usage:
-    transrust remove <e>
+    transrust [options] remove <e>
     transrust [options] <transformations>...
     transrust (-h | --help)
     transrust --transfos
@@ -53,7 +53,9 @@ Options:
                            the size is 0, the buffer is unlimited. Use this if you have memory
                            issues even while setting a smaller output buffer and batch size.
                            [default: 0]
-    -a, --append           Does not overwrite output file but appends results instead.";
+    -a, --append           Does not overwrite output file but appends results instead.
+    -f, --filter           Only outputs incorrect transfos.
+    ";
 
 #[derive(Debug, Deserialize, Clone)]
 struct Args {
@@ -69,6 +71,7 @@ struct Args {
     flag_append: bool,
     cmd_remove: bool,
     arg_e: Option<u64>,
+    flag_f: bool,
 }
 
 fn init_transfo(lst: &[String]) -> TransfoVec {
@@ -139,6 +142,7 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
     let cmd_remove = args.cmd_remove;
     let arg_e = args.arg_e;
+    let flag_f = args.flag_f;
 
     // Init filters
     let deftest = |ref x: &GraphTransformation| -> Result<String, ()> {
@@ -163,11 +167,11 @@ fn main() -> Result<(), TransProofError> {
     let sender;
     let receiver;
     if channel_size == 0 {
-        let chan = channel::<String>();
+        let chan = channel::<LogInfo>();
         sender = SenderVariant::from(chan.0);
         receiver = chan.1;
     } else {
-        let chan = sync_channel::<String>(channel_size);
+        let chan = sync_channel::<LogInfo>(channel_size);
         sender = SenderVariant::from(chan.0);
         receiver = chan.1;
     }
@@ -188,6 +192,8 @@ fn main() -> Result<(), TransProofError> {
         res
     };
 
+    let red_client = redis::Client::open("redis://127.0.0.1/").unwrap();
+
     let mut s = 1;
     let mut total = 0;
     let mut v;
@@ -198,7 +204,7 @@ fn main() -> Result<(), TransProofError> {
         total += s;
         if s > 0 {
             info!("Loaded a batch of size {}", s);
-            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone());
+            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone(), flag_f, &red_client);
             if res.is_err() {
                 break;
             }

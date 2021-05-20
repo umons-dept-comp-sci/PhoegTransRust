@@ -3,13 +3,14 @@ use std::any::Any;
 use std::io;
 use std::sync::mpsc;
 use thiserror::Error;
+use crate::compute::LogInfo;
 
 #[derive(Error, Debug)]
 pub enum TransProofError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
-    Send(#[from] mpsc::SendError<String>),
+    Send(#[from] mpsc::SendError<LogInfo>),
     #[error("Data handling thread panicked.")]
     Thread(Box<dyn Any + Send>),
     #[error(transparent)]
