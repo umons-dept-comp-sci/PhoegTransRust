@@ -4,6 +4,7 @@ mod transformation;
 mod utils;
 
 use graph::transfo_result::GraphTransformation;
+use graph::GraphNauty;
 // use graph::invariant;
 use docopt::Docopt;
 use log::{debug, info, warn, error};
@@ -31,6 +32,7 @@ These graphs have to be given in graph6 format from the input (one signature per
 result is outputed in csv format.
 
 Usage:
+    transrust remove <e>
     transrust [options] <transformations>...
     transrust (-h | --help)
     transrust --transfos
@@ -65,6 +67,8 @@ struct Args {
     flag_t: usize,
     flag_c: usize,
     flag_append: bool,
+    cmd_remove: bool,
+    arg_e: Option<u64>,
 }
 
 fn init_transfo(lst: &[String]) -> TransfoVec {
@@ -133,6 +137,8 @@ fn main() -> Result<(), TransProofError> {
     let num_threads = args.flag_t;
     let channel_size = args.flag_c;
     let append = args.flag_append;
+    let cmd_remove = args.cmd_remove;
+    let arg_e = args.arg_e;
 
     // Init filters
     let deftest = |ref x: &GraphTransformation| -> Result<String, ()> {
@@ -169,11 +175,18 @@ fn main() -> Result<(), TransProofError> {
     let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append))?;
 
     // Init transformations
-    let trs = init_transfo(&transfos);
-    if trs.is_empty() {
-        error!("No transformation found.");
-        panic!("No transformation found.");
-    }
+    let trs: TransfoVec = if !cmd_remove {
+        let trs = init_transfo(&transfos);
+        if trs.is_empty() {
+            error!("No transformation found.");
+            panic!("No transformation found.");
+        }
+        trs
+    } else {
+        let mut res: TransfoVec = Vec::new();
+        res.push(Box::new(move |g: &GraphNauty| graph::transfos::remove_num_edges(g, arg_e.unwrap())));
+        res
+    };
 
     let mut s = 1;
     let mut total = 0;
