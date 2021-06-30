@@ -41,7 +41,26 @@ pub fn handle_graph<T, F>(
     t: &mut SenderVariant<LogInfo>,
     trsf: &T,
     ftrs: Arc<F>,
-    filter: bool,
+) -> Result<(), TransProofError>
+where
+    T: Transformation,
+    F: Fn(&GraphTransformation) -> Result<String, ()>,
+{
+    let mut r = apply_transfos(&g, trsf);
+    for h in r {
+        let s = apply_filters(&h, ftrs.clone());
+        if let Ok(res) = s {
+            t.send(LogInfo::Transfo(h))?;
+        }
+    }
+    Ok(())
+}
+
+pub fn handle_graph_with_filter<T, F>(
+    g: GraphNauty,
+    t: &mut SenderVariant<LogInfo>,
+    trsf: &T,
+    ftrs: Arc<F>,
     red_con: &mut Arc<Mutex<redis::Connection>>,
 ) -> Result<(), TransProofError>
 where
@@ -49,46 +68,41 @@ where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
     let mut r = apply_transfos(&g, trsf);
-    if filter {
-        if !r.is_empty() {
-            let mut sig = format!("{}", g);
-            let tot_trans = r.len();
-            let mut pipe = redis::pipe();
+    if !r.is_empty() {
+        let mut sig = format!("{}", g);
+        let psig = sig.clone();
+        let tot_trans = r.len();
+        let mut pipe = redis::pipe();
+        pipe.hget(&sig[&sig.len() - 2..], &sig);
+        let mut fg;
+        for res in r.iter_mut() {
+            fg = canon_graph(&res.final_graph());
+            sig = format!("{}", fg.0);
             pipe.hget(&sig[&sig.len() - 2..], &sig);
-            let mut fg;
-            for res in r.iter_mut() {
-                fg = canon_graph(&res.final_graph());
-                sig = format!("{}", fg.0);
-                pipe.hget(&sig[&sig.len() - 2..], &sig);
-            }
-            let vals: Vec<f64> = pipe.query(&mut *red_con.lock().unwrap()).unwrap();
-            let filtered = r
-                .iter()
-                .enumerate()
-                .filter(|(id, _)| vals[0] <= vals[id + 1])
-                .collect::<Vec<_>>();
-            if filtered.len() == tot_trans {
-                t.send(LogInfo::LocalExtremum(g))?;
-            } else {
-                for (id, g) in filtered {
-                    t.send(LogInfo::IncorrectTransfo {
-                        result: g.clone(),
-                        before: vals[0],
-                        after: vals[id + 1],
-                    })?
-                }
-            }
         }
-    } else {
-        for h in r {
-            let s = apply_filters(&h, ftrs.clone());
-            if let Ok(res) = s {
-                t.send(LogInfo::Transfo(h))?;
+        let vals: Vec<f64> = pipe.query(&mut *red_con.lock().unwrap()).unwrap();
+        if vals.len() == 1 {
+            eprintln!("{}", psig);
+        }
+        let filtered = r
+            .iter()
+            .enumerate()
+            .filter(|(id, _)| vals[0] <= vals[id + 1])
+            .collect::<Vec<_>>();
+        if filtered.len() == tot_trans {
+            t.send(LogInfo::LocalExtremum(g))?;
+        } else {
+            for (id, g) in filtered {
+                t.send(LogInfo::IncorrectTransfo {
+                    result: g.clone(),
+                    before: vals[0],
+                    after: vals[id + 1],
+                })?
             }
         }
     }
-    Ok(())
-}
+        Ok(())
+    }
 
 /// Should apply a set of transformations, filter the graphs and return the result
 pub fn handle_graphs<T, F>(
@@ -103,10 +117,16 @@ where
     T: Transformation,
     F: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
 {
-    let red_con = Arc::new(Mutex::new(red_client.get_connection().unwrap()));
-    v.into_par_iter().try_for_each_with((t, red_con), |s, x| {
-        handle_graph(x, &mut s.0, trsf, ftrs.clone(), filter, &mut s.1)
-    })?;
+    if filter {
+        let red_con = Arc::new(Mutex::new(red_client.get_connection().expect("Could not connect to redis.")));
+        v.into_par_iter().try_for_each_with((t, red_con), |s, x| {
+            handle_graph_with_filter(x, &mut s.0, trsf, ftrs.clone(), &mut s.1)
+        })?;
+    } else {
+        v.into_par_iter().try_for_each_with(t, |mut s, x| {
+            handle_graph(x, &mut s, trsf, ftrs.clone())
+        })?;
+    }
     Ok(())
 }
 
@@ -177,7 +197,7 @@ pub fn output(
                 after: v2,
             } => {
                 i += 1;
-                bufout.write_all(&format!("{}", g.tocsv()).into_bytes())?;
+                bufout.write_all(&format!("{}", g.to_incorrect()).into_bytes())?;
                 bufout.write_all(&format!(",{},{}\n",v1,v2).into_bytes())?;
             }
             LogInfo::LocalExtremum(g) => {

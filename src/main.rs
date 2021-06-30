@@ -192,7 +192,7 @@ fn main() -> Result<(), TransProofError> {
         res
     };
 
-    let red_client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let red_client = redis::Client::open("redis://127.0.0.1/").expect("Could not connect to redis.");
 
     let mut s = 1;
     let mut total = 0;
