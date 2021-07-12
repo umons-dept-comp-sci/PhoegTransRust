@@ -100,6 +100,14 @@ transformations! {
     {isolate_incl,
         desc: "Isolate a vertex having its neighborhood included in the neighborhood of another vertex.",
         commands: ["isolate_incl"]
+    },
+    {isolate_incl_adj,
+        desc: "Isolate a vertex having its neighborhood included in the neighborhood of an adjacent vertex.",
+        commands: ["isolate_incl_adj"]
+    },
+    {remove_incl_adj,
+        desc: "Removes a vertex having its neighborhood included in the neighborhood of an adjacent vertex.",
+        commands: ["remove_incl_adj"]
     }
 }
 
