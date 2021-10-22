@@ -55,6 +55,7 @@ Options:
                            [default: 0]
     -a, --append           Does not overwrite output file but appends results instead.
     -f, --filter           Only outputs incorrect transfos.
+    --postgres             Format as a csv ready to import in a postgresql table.
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -72,6 +73,7 @@ struct Args {
     cmd_remove: bool,
     arg_e: Option<u64>,
     flag_f: bool,
+    flag_postgres: bool,
 }
 
 fn init_transfo(lst: &[String]) -> TransfoVec {
@@ -143,6 +145,7 @@ fn main() -> Result<(), TransProofError> {
     let cmd_remove = args.cmd_remove;
     let arg_e = args.arg_e;
     let flag_f = args.flag_f;
+    let flag_postgres = args.flag_postgres;
 
     // Init filters
     let deftest = |ref x: &GraphTransformation| -> Result<String, ()> {
@@ -176,7 +179,7 @@ fn main() -> Result<(), TransProofError> {
         receiver = chan.1;
     }
     let builder = thread::Builder::new();
-    let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append))?;
+    let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append, flag_postgres))?;
 
     // Init transformations
     let trs: TransfoVec = if !cmd_remove {
