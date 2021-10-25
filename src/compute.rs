@@ -41,6 +41,7 @@ pub fn handle_graph<T, F>(
     t: &mut SenderVariant<LogInfo>,
     trsf: &T,
     ftrs: Arc<F>,
+    postgres: bool
 ) -> Result<(), TransProofError>
 where
     T: Transformation,
@@ -50,7 +51,12 @@ where
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(res) = s {
-            t.send(LogInfo::Transfo(h))?;
+            let txt = if postgres {
+                h.to_postgres()
+            } else {
+                h.tocsv()
+            };
+            t.send(LogInfo::Transfo(h, txt.to_string()))?;
         }
     }
     Ok(())
@@ -112,6 +118,7 @@ pub fn handle_graphs<T, F>(
     ftrs: Arc<F>,
     filter: bool,
     red_client: &redis::Client,
+    postgres: bool
 ) -> Result<(), TransProofError>
 where
     T: Transformation,
@@ -124,7 +131,7 @@ where
         })?;
     } else {
         v.into_par_iter().try_for_each_with(t, |mut s, x| {
-            handle_graph(x, &mut s, trsf, ftrs.clone())
+            handle_graph(x, &mut s, trsf, ftrs.clone(), postgres)
         })?;
     }
     Ok(())
@@ -157,7 +164,7 @@ where
 
 #[derive(Debug)]
 pub enum LogInfo {
-    Transfo(GraphTransformation),
+    Transfo(GraphTransformation, String),
     IncorrectTransfo {
         result: GraphTransformation,
         before: f64,
@@ -188,13 +195,14 @@ pub fn output(
     let mut i = 0;
     for log in receiver.iter() {
         match log {
-            LogInfo::Transfo(t) => {
+            LogInfo::Transfo(t, s) => {
                 i += 1;
-                if postgres {
-                    bufout.write_all(&format!("{}\n", t.to_postgres()).into_bytes())?;
-                } else {
-                    bufout.write_all(&format!("{}\n", t.tocsv()).into_bytes())?;
-                }
+                bufout.write_all(&s.into_bytes())?;
+                //if postgres {
+                    //bufout.write_all(&format!("{}", t.to_postgres()).into_bytes())?;
+                //} else {
+                    //bufout.write_all(&format!("{}", t.tocsv()).into_bytes())?;
+                //}
             }
             LogInfo::IncorrectTransfo {
                 result: g,

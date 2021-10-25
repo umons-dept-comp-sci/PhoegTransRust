@@ -1,4 +1,4 @@
-mod compute;
+pub mod compute;
 mod errors;
 mod transformation;
 mod utils;
@@ -207,7 +207,7 @@ fn main() -> Result<(), TransProofError> {
         total += s;
         if s > 0 {
             info!("Loaded a batch of size {}", s);
-            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone(), flag_f, &red_client);
+            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone(), flag_f, &red_client, flag_postgres);
             if res.is_err() {
                 break;
             }

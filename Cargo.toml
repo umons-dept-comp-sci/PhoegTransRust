@@ -5,7 +5,6 @@ authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
 edition="2018"
 
 [dependencies]
-
 rayon = "1.0"
 #graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git", branch = "orbits-main"}
 graph = {path = "../graph"}
@@ -17,3 +16,14 @@ env_logger = "0.5"
 lazy_static = "1.1"
 thiserror = "1.0"
 redis="0.20"
+
+[lib]
+name="transrust_lib"
+path="src/lib.rs"
+
+[dev-dependencies]
+criterion = {version="0.3.5", features=["html_reports"]}
+
+[[bench]]
+name = "rotation"
+harness = false
