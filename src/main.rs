@@ -148,12 +148,12 @@ fn main() -> Result<(), TransProofError> {
     let flag_postgres = args.flag_postgres;
 
     // Init filters
-    let deftest = |ref x: &GraphTransformation| -> Result<String, ()> {
-        as_filter(|_| true, |x| x.tocsv())(&x)
-    };
-    let ftrs = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
-        combine_filters(&deftest, trash_node)(&x)
+    let deftest = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
+        as_filter(|_| true, |_| "".to_string())(&x)
     });
+    //let ftrs = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
+        //combine_filters(&deftest, trash_node)(&x)
+    //});
 
     // Init input
     let mut buf: Box<dyn BufRead> = match filename.as_str() {
@@ -179,7 +179,7 @@ fn main() -> Result<(), TransProofError> {
         receiver = chan.1;
     }
     let builder = thread::Builder::new();
-    let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append, flag_postgres))?;
+    let whandle = builder.spawn(move || output(receiver, outfilename, buffer, append))?;
 
     // Init transformations
     let trs: TransfoVec = if !cmd_remove {
@@ -207,7 +207,7 @@ fn main() -> Result<(), TransProofError> {
         total += s;
         if s > 0 {
             info!("Loaded a batch of size {}", s);
-            res = handle_graphs(v, sender.clone(), &trs, ftrs.clone(), flag_f, &red_client, flag_postgres);
+            res = handle_graphs(v, sender.clone(), &trs, deftest.clone(), flag_f, &red_client, flag_postgres);
             if res.is_err() {
                 break;
             }

@@ -178,7 +178,6 @@ pub fn output(
     filename: String,
     buffer: usize,
     append: bool,
-    postgres: bool,
 ) -> Result<(), TransProofError> {
     let mut bufout: Box<dyn Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
@@ -198,11 +197,6 @@ pub fn output(
             LogInfo::Transfo(t, s) => {
                 i += 1;
                 bufout.write_all(&s.into_bytes())?;
-                //if postgres {
-                    //bufout.write_all(&format!("{}", t.to_postgres()).into_bytes())?;
-                //} else {
-                    //bufout.write_all(&format!("{}", t.tocsv()).into_bytes())?;
-                //}
             }
             LogInfo::IncorrectTransfo {
                 result: g,

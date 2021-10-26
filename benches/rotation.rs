@@ -26,7 +26,7 @@ pub fn rotation_bench(c: &mut Criterion) {
             |v| {
                 let (snd, rcv) = sync_channel::<LogInfo>(2 * nthreads);
                 let whandle = thread::spawn(move || {
-                    output(rcv, "/dev/null".to_string(), 2000000, false, false)
+                    output(rcv, "/dev/null".to_string(), 2000000, false)
                 });
                 handle_graphs(
                     v,
