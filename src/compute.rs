@@ -197,6 +197,7 @@ pub fn output(
             LogInfo::Transfo(t, s) => {
                 i += 1;
                 bufout.write_all(&s.into_bytes())?;
+                bufout.write_all(&['\n' as u8])?;
             }
             LogInfo::IncorrectTransfo {
                 result: g,
