@@ -1,4 +1,4 @@
-use graph::transfo_result::GraphTransformation;
+use crate::graph_transformation::GraphTransformation;
 
 /// Returns "s" if i is different from 1 and an empty string otherwise.
 pub fn plural(i: usize) -> String {
