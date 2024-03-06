@@ -12,10 +12,11 @@ pub struct PropertyGraphParser;
 
 impl PropertyGraphParser {
     pub fn convert_text(&self, input: &str) -> Vec<PropertyGraph> {
-        PropertyGraphParser::parse(Rule::createGraphType, input).unwrap().map(|v| self.build_graph(v)).collect()
+        PropertyGraphParser::parse(Rule::schemas, input).unwrap().next().unwrap().into_inner().map(|v| self.build_graph(v)).collect()
     }
 
     pub fn build_graph(&self, v : Pair<'_, Rule>) -> PropertyGraph {
+        dbg!(v.as_rule());
         let mut graph = PropertyGraph::default();
         let mut names = HashMap::new();
         self.handle_result(v, &mut graph, &mut names);
