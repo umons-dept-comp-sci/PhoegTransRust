@@ -1,11 +1,13 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, ops::AddAssign};
 use std::hash::Hash;
 
-use petgraph::{algo::is_isomorphic_matching, graph::{DiGraph, EdgeIndex, NodeIndex}, stable_graph::StableDiGraph, visit::EdgeRef};
+use petgraph::{algo::is_isomorphic_matching, graph::{DiGraph, EdgeIndex, NodeIndex}, stable_graph::StableDiGraph};
 use thiserror::Error;
 
 type Label = String;
 type LabelId = usize;
+
+type IsomorphismData<'a> = Option<(&'a HashMap<String, String>, HashSet<String>)>;
 
 #[derive(Debug, Clone)]
 struct IdManager<A>
@@ -232,45 +234,37 @@ impl PropertyGraph {
         write!(f, "}}")
     }
 
-    fn build_isomorphic_input(&self) -> DiGraph<HashSet<String>, Vec<HashSet<String>>> {
-        let mut graph: DiGraph<HashSet<String>, Vec<HashSet<String>>> = DiGraph::with_capacity(self.graph.node_count(), 0);
+    fn build_isomorphic_input(&self) -> DiGraph<IsomorphismData, IsomorphismData> {
+        let mut graph: DiGraph<IsomorphismData, IsomorphismData> = DiGraph::with_capacity(self.graph.node_count(), 0);
         let mut vertex_map = HashMap::new();
         self.graph.node_indices().for_each(|index| {
             let labels: HashSet<String> = self.vertex_label.element_labels(&index).map(|label| self.vertex_label.get_label(*label).unwrap().clone()).collect();
-            vertex_map.insert(index, graph.add_node(labels));
+            let props = self.graph.node_weight(index).unwrap();
+            vertex_map.insert(index, graph.add_node(Some((&props.map, labels))));
         });
         self.graph.edge_indices().for_each(|edge| {
             let (self_node_from, self_node_to) = self.graph.edge_endpoints(edge).unwrap();
             let graph_from = *vertex_map.get(&self_node_from).unwrap();
             let graph_to = *vertex_map.get(&self_node_to).unwrap();
             let labels: HashSet<String> = self.edge_label.element_labels(&edge).map(|label| self.edge_label.get_label(*label).unwrap().clone()).collect();
-            match graph.edges_connecting(graph_from, graph_to).next() {
-                Some(edge) => {
-                    graph.edge_weight_mut(edge.id()).unwrap().push(labels);
-                },
-                None => {
-                    graph.add_edge(graph_from, graph_to, vec![labels]);
-                }
+            let props = self.graph.edge_weight(edge).unwrap();
+            let data = Some((&props.map, labels));
+            if self.graph.edges_connecting(self_node_from, self_node_to).count() > 1 {
+                let inter_node = graph.add_node(None);
+                graph.add_edge(graph_from, inter_node, data);
+                graph.add_edge(inter_node, graph_to, None);
+            } else {
+                graph.add_edge(graph_from, graph_to, data);
             }
         });
         graph
     }
     
     pub fn is_isomorphic(&self, other : &PropertyGraph) -> bool {
-        let labels_match = |labels_left : &HashSet<String>, labels_right: &HashSet<String>| {
-            labels_left == labels_right
+        let data_match = |data_left : &IsomorphismData, data_right: &IsomorphismData| {
+            data_left == data_right
         };
-        let labels_sets_match = |labels_sets_left : &Vec<HashSet<String>>, labels_sets_right: &Vec<HashSet<String>>| {
-            for set_left in labels_sets_left {
-                for set_right in labels_sets_right {
-                    if set_left == set_right {
-                        return true;
-                    }
-                }
-            }
-            false
-        };
-        is_isomorphic_matching(&self.build_isomorphic_input(), &other.build_isomorphic_input(), labels_match, labels_sets_match)
+        is_isomorphic_matching(&self.build_isomorphic_input(), &other.build_isomorphic_input(), data_match, data_match)
     }
 }
 
