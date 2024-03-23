@@ -16,7 +16,7 @@ impl PropertyGraphParser {
     }
 
     pub fn build_graph(&self, v : Pair<'_, Rule>) -> PropertyGraph {
-        dbg!(v.as_rule());
+        v.as_rule();
         let mut graph = PropertyGraph::default();
         let mut names = HashMap::new();
         self.handle_result(v, &mut graph, &mut names);

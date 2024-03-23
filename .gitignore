@@ -9,3 +9,4 @@ rename.sh
 datalog
 datalog_compiled
 src/transformation/souffle/programs.rs
+.vscode

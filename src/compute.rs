@@ -12,6 +12,8 @@ use std::sync::mpsc::{Receiver, SendError, Sender, SyncSender};
 use std::sync::Arc;
 use std::time::Instant;
 
+use self::souffle::{create_program_instance, SouffleProgram};
+
 pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
@@ -22,6 +24,7 @@ where
 
 /// Should apply a set of transformations, filter the graphs and return the result
 pub fn handle_graph<T, F>(
+    program : SouffleProgram,
     g: PropertyGraph,
     t: &mut SenderVariant<LogInfo>,
     trsf: &T,
@@ -31,7 +34,7 @@ where
     T: Transformation,
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
-    let r = trsf.apply(&g);
+    let r = trsf.apply(program, &g);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
@@ -43,6 +46,7 @@ where
 
 /// Should apply a set of transformations, filter the graphs and return the result
 pub fn handle_graphs<T, F>(
+    program_name : &str,
     v: Vec<PropertyGraph>,
     t: SenderVariant<LogInfo>,
     trsf: &T,
@@ -52,8 +56,13 @@ where
     T: Transformation,
     F: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
 {
-    v.into_par_iter().try_for_each_with(t, |mut s, x| {
-        handle_graph(x, &mut s, trsf, ftrs.clone())
+    let init = || {
+        let t = t.clone();
+        let prog = create_program_instance(program_name);
+        (t, prog)
+    };
+    v.into_par_iter().try_for_each_init(init, |mut s, x| {
+        handle_graph(s.1, x, &mut s.0, trsf, ftrs.clone())
     })?;
     Ok(())
 }

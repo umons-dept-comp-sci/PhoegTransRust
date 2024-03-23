@@ -1,9 +1,9 @@
+use std::ptr::{null, null_mut};
+
 use cxx::{let_cxx_string, CxxString, UniquePtr};
 use petgraph::visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences, NodeRef};
 
 use crate::{graph_transformation::GraphTransformation, property_graph::PropertyGraph};
-
-mod programs;
 
 #[cxx::bridge(namespace = "souffle")]
 mod souffle_ffi {
@@ -38,6 +38,11 @@ mod souffle_ffi {
 
         unsafe fn purgeProgram(prog: *mut SouffleProgram);
     }
+
+    unsafe extern "C++" {
+        include!("/home/sverdar/Transproof/PhoegTransRust/datalog_compiled/basic.cpp");
+        pub type factory_Sf_basic;
+    }
 }
 
 pub type SouffleProgram = *mut souffle_ffi::SouffleProgram;
@@ -65,11 +70,13 @@ fn fill_relation<E, I, F>(
     F: Fn(&InputTuple, E),
 {
     let relation = get_relation(program, relation_name);
-    for element in elements {
-        unsafe {
-            let tuple = souffle_ffi::createTuple(relation);
-            to_tuple(&tuple, element);
-            souffle_ffi::insertTuple(relation, tuple);
+    if relation != null_mut::<souffle_ffi::Relation>() {
+        for element in elements {
+            unsafe {
+                let tuple = souffle_ffi::createTuple(relation);
+                to_tuple(&tuple, element);
+                souffle_ffi::insertTuple(relation, tuple);
+            }
         }
     }
 }

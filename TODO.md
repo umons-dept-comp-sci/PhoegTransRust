@@ -1,0 +1,4 @@
+Limitations:
+- Each program requires manual registering in the transformation/souffle/mod.rs file. For some reason, the compiler removes the references to the program factory otherwise. This probably requires some compiler configuration somewhere.
+- It is not yet possible to automatically infer transformations from a relation. While it would be possible to list output relations as well as their arity and the type of their arguments, we cannot infer what to do. For example, how should we know that rotation gives us the id of to adjacent vertices to disconnect and a third to connect to the first?
+- It is not possible in souffle's cpp interface to create new relations programmatically. Once the file has been compiled, it is final.

@@ -67,7 +67,7 @@ fn main() {
     }
     close_program_list_file(program_list_writer);
 
-    cxx_build::bridge("src/transformation/souffle/mod.rs")
+    cxx_build::bridges(["src/transformation/souffle/mod.rs", "src/transformation/souffle/programs.rs"])
         .file("cpp_util/souffleUtil.hpp")
         .file("datalog_compiled/basic.cpp")
         .cpp(true)

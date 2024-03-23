@@ -183,7 +183,7 @@ fn main() -> Result<(), TransProofError> {
     buf.read_to_string(&mut text)?;
     v = parser.convert_text(&text);
     if !v.is_empty() {
-        handle_graphs(v, result_sender.clone(), &trs, deftest.clone())?;
+        handle_graphs("basic", v, result_sender.clone(), &trs, deftest.clone())?;
     }
     drop(result_sender);
     whandle.join().map_err(|x| TransProofError::Thread(x))??;

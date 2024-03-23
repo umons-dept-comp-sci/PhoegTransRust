@@ -9,7 +9,7 @@ use std::convert::TryFrom;
 
 use self::souffle::{apply_transformation, SouffleProgram};
 
-mod souffle;
+pub mod souffle;
 
 macro_rules! transformations {
     ($( {$func:ident, desc : $desc:expr, commands: [$( $alias:expr ),+]} ),+)
@@ -79,11 +79,30 @@ pub fn relabel_vertex_souffle(program: SouffleProgram, g : &PropertyGraph) -> Ve
     apply_transformation(program, "RelabelVertex", extract_data, relabel, g)
 }
 
+pub fn remove_edge(program: SouffleProgram, g : &PropertyGraph) -> Vec<GraphTransformation> {
+    fn extract_data(tuple : OutputTuple) -> u32 {
+        extract_number(tuple)
+    }
+    fn remove(g : &PropertyGraph, operation : u32) -> GraphTransformation {
+        let mut res: GraphTransformation = g.into();
+        let index = operation.into();
+        res.result.graph.remove_edge(index);
+        res.result.edge_label.remove_element(&index);
+        res
+    }
+    apply_transformation(program, "RemoveEdge", extract_data, remove, g)
+}
+
 transformations! {
     {
-        relabel_vertex,
+        relabel_vertex_souffle,
         desc: "Tries every relabelling of a vertex using each existing label.",
         commands: ["relabel_vertex"]
+    },
+    {
+        remove_edge,
+        desc: "Tries every edge removal.",
+        commands: ["remove_edge"]
     }
 }
 
@@ -103,15 +122,15 @@ pub fn print_transfos() {
 }
 
 pub trait Transformation: Send + Sync {
-    fn apply(&self, input: &PropertyGraph) -> Vec<GraphTransformation>;
+    fn apply(&self, program: SouffleProgram, input: &PropertyGraph) -> Vec<GraphTransformation>;
 }
 
 impl<F> Transformation for F
 where
-    F: Fn(&PropertyGraph) -> Vec<GraphTransformation> + Send + Sync,
+    F: Fn(SouffleProgram, &PropertyGraph) -> Vec<GraphTransformation> + Send + Sync,
 {
-    fn apply(&self, input: &PropertyGraph) -> Vec<GraphTransformation> {
-        self(input)
+    fn apply(&self, program: SouffleProgram, input: &PropertyGraph) -> Vec<GraphTransformation> {
+        self(program, input)
     }
 }
 
@@ -127,9 +146,9 @@ impl TryFrom<&str> for Box<dyn Transformation> {
 pub type TransfoVec = Vec<Box<dyn Transformation>>;
 
 impl Transformation for TransfoVec {
-    fn apply(&self, input: &PropertyGraph) -> Vec<GraphTransformation> {
+    fn apply(&self, program: SouffleProgram, input: &PropertyGraph) -> Vec<GraphTransformation> {
         self.iter()
-            .flat_map(|x| x.apply(input).into_iter())
+            .flat_map(|x| x.apply(program, input).into_iter())
             .collect()
     }
 }
