@@ -1,9 +1,15 @@
-use crate::graph_transformation::GraphTransformation;
+use crate::transformation::souffle::extract_number;
+use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
 use crate::property_graph::PropertyGraph;
 use crate::errors::TransProofError;
 use lazy_static::lazy_static;
+use petgraph::visit::NodeIndexable;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+
+use self::souffle::{apply_transformation, SouffleProgram};
+
+mod souffle;
 
 macro_rules! transformations {
     ($( {$func:ident, desc : $desc:expr, commands: [$( $alias:expr ),+]} ),+)
@@ -58,6 +64,19 @@ pub fn relabel_vertex(g : &PropertyGraph) -> Vec<GraphTransformation> {
         }
     }
     res
+}
+
+pub fn relabel_vertex_souffle(program: SouffleProgram, g : &PropertyGraph) -> Vec<GraphTransformation> {
+    fn extract_data(tuple : OutputTuple) -> (u32, u32, u32) {
+        (extract_number(tuple), extract_number(tuple), extract_number(tuple))
+    }
+    fn relabel(g : &PropertyGraph, operation : (u32, u32, u32)) -> GraphTransformation {
+        let mut res: GraphTransformation = g.into();
+        res.result.vertex_label.remove_label_mapping(&(operation.0.into()), operation.1).unwrap();
+        res.result.vertex_label.add_label_mapping(&(operation.0.into()), operation.2).unwrap();
+        res
+    }
+    apply_transformation(program, "RelabelVertex", extract_data, relabel, g)
 }
 
 transformations! {

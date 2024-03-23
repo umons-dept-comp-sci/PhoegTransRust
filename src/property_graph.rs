@@ -5,7 +5,7 @@ use petgraph::{algo::is_isomorphic_matching, graph::{DiGraph, EdgeIndex, NodeInd
 use thiserror::Error;
 
 type Label = String;
-type LabelId = usize;
+type LabelId = u32;
 
 type IsomorphismData<'a> = Option<(&'a HashMap<String, String>, HashSet<String>)>;
 
@@ -204,7 +204,7 @@ pub struct Properties {
 
 #[derive(Debug, Clone)]
 pub struct PropertyGraph {
-    pub graph: StableDiGraph<Properties, Properties>,
+    pub graph: StableDiGraph<Properties, Properties, u32>,
     pub vertex_label : LabelMap<NodeIndex>,
     pub edge_label : LabelMap<EdgeIndex>,
 }
@@ -344,9 +344,9 @@ mod test {
 
     #[test]
     fn label_iterator_test() {
-        let mut map : LabelMap<usize> = Default::default();
+        let mut map : LabelMap<u32> = Default::default();
         let mut labels : HashSet<String> = HashSet::from_iter(["test1".to_string(), "test2".to_string(), "test3".to_string()].into_iter());
-        let mut ids : HashSet<usize> = labels.iter().map(|label| {
+        let mut ids : HashSet<u32> = labels.iter().map(|label| {
             map.add_label(label.clone())
         }).collect();
         assert_eq!(3, ids.len());
