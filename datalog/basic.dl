@@ -1,0 +1,33 @@
+.decl Vertex(id:unsigned)
+.input Vertex
+
+.decl VertexLabel(id:unsigned)
+.input VertexLabel
+
+.decl VertexHasLabel(elem:unsigned, label:unsigned)
+.input VertexHasLabel
+
+.decl Edge(id:unsigned, from:unsigned, to:unsigned)
+.input Edge
+
+.decl EdgeLabel(id:unsigned)
+.input EdgeLabel
+
+.decl EdgeHasLabel(elem:unsigned, label:unsigned)
+.input EdgeHasLabel
+
+.decl RelabelVertex(vertex:unsigned, oldLabel:unsigned, newLabel:unsigned)
+.output RelabelVertex
+
+RelabelVertex(vertex, oldLabel, newLabel):-
+    Vertex(vertex),
+    VertexLabel(newLabel),
+    VertexLabel(oldLabel),
+    VertexHasLabel(vertex, oldLabel),
+    oldLabel != newLabel.
+
+.decl RemoveEdge(id:unsigned)
+.output RemoveEdge
+
+RemoveEdge(id):-
+    Edge(id, _, _).
