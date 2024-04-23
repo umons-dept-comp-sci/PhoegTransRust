@@ -1,3 +1,4 @@
+use crate::souffle::extract_text;
 use crate::transformation::souffle::extract_number;
 use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
 use crate::property_graph::PropertyGraph;
@@ -93,6 +94,19 @@ pub fn remove_edge(program: SouffleProgram, g : &PropertyGraph) -> Vec<GraphTran
     apply_transformation(program, "RemoveEdge", extract_data, remove, g)
 }
 
+pub fn remove_vertex_property(program: SouffleProgram, g : &PropertyGraph) -> Vec<GraphTransformation> {
+    fn extract_data(tuple : OutputTuple) -> (u32, std::string::String) {
+        (extract_number(tuple), extract_text(tuple))
+    }
+    fn remove(g : &PropertyGraph, operation : (u32, std::string::String)) -> GraphTransformation {
+        let mut res: GraphTransformation = g.into();
+        let index = operation.0.into();
+        res.result.graph.node_weight_mut(index).unwrap().map.remove(&operation.1);
+        res
+    }
+    apply_transformation(program, "RemoveProperty", extract_data, remove, g)
+}
+
 transformations! {
     {
         relabel_vertex_souffle,
@@ -103,6 +117,11 @@ transformations! {
         remove_edge,
         desc: "Tries every edge removal.",
         commands: ["remove_edge"]
+    },
+    {
+        remove_vertex_property,
+        desc: "Tries every vertex property removal.",
+        commands: ["remove_property"]
     }
 }
 

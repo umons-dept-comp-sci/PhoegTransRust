@@ -5,45 +5,7 @@ use petgraph::visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences, NodeRef};
 
 use crate::{graph_transformation::GraphTransformation, property_graph::PropertyGraph};
 
-#[cxx::bridge(namespace = "souffle")]
-mod souffle_ffi {
-    unsafe extern "C++" {
-        include!("/usr/local/include/souffle/SouffleInterface.h");
-
-        type SouffleProgram;
-        type ProgramFactory;
-        type Relation;
-        type tuple;
-
-    }
-
-    unsafe extern "C++" {
-        include!("cpp_util/souffleUtil.hpp");
-
-        fn newInstance(name: &CxxString) -> *mut SouffleProgram;
-        unsafe fn getRelation(prog: *const SouffleProgram, name: &CxxString) -> *mut Relation;
-        unsafe fn runProgram(prog: *mut SouffleProgram);
-        unsafe fn createTuple(rel: *const Relation) -> UniquePtr<tuple>;
-        fn insertNumber(tuple: &UniquePtr<tuple>, number: u32);
-        unsafe fn insertTuple(rel: *mut Relation, tuple: UniquePtr<tuple>);
-        unsafe fn freeProgram(prog: *mut SouffleProgram);
-
-        type TupleIterator;
-        unsafe fn createTupleIterator(rel: *const Relation) -> UniquePtr<TupleIterator>;
-        fn hasNext(iter: &UniquePtr<TupleIterator>) -> bool;
-        fn getNext(iter: &mut UniquePtr<TupleIterator>) -> *const tuple;
-
-        unsafe fn getNumber(t: *const tuple) -> u32;
-        //unsafe fn getText(t : *const tuple) -> CxxString;
-
-        unsafe fn purgeProgram(prog: *mut SouffleProgram);
-    }
-
-    unsafe extern "C++" {
-        include!("/home/sverdar/Transproof/PhoegTransRust/datalog_compiled/basic.cpp");
-        pub type factory_Sf_basic;
-    }
-}
+mod souffle_ffi;
 
 pub type SouffleProgram = *mut souffle_ffi::SouffleProgram;
 type Relation = *mut souffle_ffi::Relation;
@@ -55,9 +17,16 @@ pub fn create_program_instance(name: &str) -> SouffleProgram {
     souffle_ffi::newInstance(&cname)
 }
 
-fn get_relation(program: SouffleProgram, name: &str) -> Relation {
+fn get_relation(program: SouffleProgram, name: &str) -> Option<Relation> {
     let_cxx_string!(cname = name);
-    unsafe { souffle_ffi::getRelation(program, &cname) }
+    unsafe {
+        let relation = souffle_ffi::getRelation(program, &cname);
+        if relation.is_null() {
+            None
+        } else {
+            Some(relation)
+        }
+    }
 }
 
 fn fill_relation<E, I, F>(
@@ -69,8 +38,7 @@ fn fill_relation<E, I, F>(
     I: Iterator<Item = E>,
     F: Fn(&InputTuple, E),
 {
-    let relation = get_relation(program, relation_name);
-    if relation != null_mut::<souffle_ffi::Relation>() {
+    if let Some(relation) = get_relation(program, relation_name) {
         for element in elements {
             unsafe {
                 let tuple = souffle_ffi::createTuple(relation);
@@ -107,6 +75,20 @@ fn encode_graph(program: SouffleProgram, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
+        "VertexProperty",
+        graph.graph.node_indices().flat_map(|n| {
+            let weight = graph.graph.node_weight(n).unwrap();
+            std::iter::repeat(n).zip(weight.map.iter()).map(|(n,pair)| (n, pair.0, pair.1))
+        }),
+        |tup, data| {
+            souffle_ffi::insertNumber(tup, data.0.id().index() as u32);
+            let_cxx_string!(name = data.1);
+            souffle_ffi::insertText(tup, &name);
+            let_cxx_string!(value = data.2);
+            souffle_ffi::insertText(tup, &value);
+    });
+    fill_relation(
+        program,
         "EdgeLabel",
         graph.edge_label.labels(),
         |tup, id| {
@@ -117,6 +99,20 @@ fn encode_graph(program: SouffleProgram, graph: &PropertyGraph) {
         souffle_ffi::insertNumber(tup, edge.id().index() as u32);
         souffle_ffi::insertNumber(tup, edge.source().index() as u32);
         souffle_ffi::insertNumber(tup, edge.target().index() as u32);
+    });
+    fill_relation(
+        program,
+        "EdgeProperty",
+        graph.graph.edge_indices().flat_map(|n| {
+            let weight = graph.graph.edge_weight(n).unwrap();
+            std::iter::repeat(n).zip(weight.map.iter()).map(|(n,pair)| (n, pair.0, pair.1))
+        }),
+        |tup, data| {
+            souffle_ffi::insertNumber(tup, data.0.index() as u32);
+            let_cxx_string!(name = data.1);
+            souffle_ffi::insertText(tup, &name);
+            let_cxx_string!(value = data.2);
+            souffle_ffi::insertText(tup, &value);
     });
     fill_relation(
         program,
@@ -138,6 +134,13 @@ pub fn extract_number(tuple : OutputTuple) -> u32 {
     }
 }
 
+pub fn extract_text(tuple : OutputTuple) -> std::string::String {
+    unsafe {
+        let str = souffle_ffi::getText(tuple);
+        str.to_str().expect("Error with utf8.").to_string()
+    }
+}
+
 pub fn apply_transformation<P, Ex, Tr>(program : SouffleProgram, output_relation_name : &str, extract_data : Ex, apply_transfo : Tr, g : &PropertyGraph) -> Vec<GraphTransformation> 
 where
     Ex : Fn(OutputTuple) -> P,
@@ -147,7 +150,7 @@ where
     encode_graph(program, g);
     unsafe {
         souffle_ffi::runProgram(program);
-        let out_relation = get_relation(program, output_relation_name);
+        let out_relation = get_relation(program, output_relation_name).expect("No relation for the transformations.");
         let mut iter = souffle_ffi::createTupleIterator(out_relation);
         while souffle_ffi::hasNext(&iter) {
             let params = extract_data(souffle_ffi::getNext(&mut iter));

@@ -7,6 +7,12 @@
 .decl VertexHasLabel(elem:unsigned, label:unsigned)
 .input VertexHasLabel
 
+.decl VertexProperty(id:unsigned, name: symbol, value: symbol)
+.input VertexProperty
+
+.decl EdgeProperty(id:unsigned, name: symbol, value: symbol)
+.input EdgeProperty
+
 .decl Edge(id:unsigned, from:unsigned, to:unsigned)
 .input Edge
 
@@ -31,3 +37,9 @@ RelabelVertex(vertex, oldLabel, newLabel):-
 
 RemoveEdge(id):-
     Edge(id, _, _).
+
+.decl RemoveProperty(vertex: unsigned, prop : symbol)
+.output RemoveProperty
+
+RemoveProperty(vertex, prop) :-
+    VertexProperty(vertex, prop, _).

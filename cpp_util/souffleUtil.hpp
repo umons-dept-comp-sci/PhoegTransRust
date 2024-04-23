@@ -29,7 +29,7 @@ namespace souffle
         *(tuple.get()) << number;
     }
 
-    void insertText(const std::unique_ptr<souffle::tuple> &tuple, std::string text)
+    void insertText(const std::unique_ptr<souffle::tuple> &tuple, const std::string &text)
     {
         *(tuple.get()) << text;
     }
@@ -40,9 +40,9 @@ namespace souffle
         return res;
     }
 
-    std::string getText(const souffle::tuple* t) {
-        std::string res;
-        ((souffle::tuple &)*t) >> res;
+    std::unique_ptr<std::string> getText(const souffle::tuple* t) {
+        std::unique_ptr<std::string> res = std::make_unique<std::string>();
+        ((souffle::tuple &)*t) >> *res;
         return res;
     }
 

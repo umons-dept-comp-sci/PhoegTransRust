@@ -1,19 +1,20 @@
 use std::fs::{self, read_dir, File};
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::PathBuf;
 
 const DATALOG_DIR : &'static str = "datalog";
 const DATALOG_COMPILED : &'static str = "datalog_compiled";
 
-const PROGRAM_LIST_FILE : &'static str = "src/transformation/souffle/programs.rs";
+const PROGRAM_LIST_FILE : &'static str = "src/transformation/souffle/souffle_ffi.rs";
+const PROGRAM_LIST_TEMPLATE : &'static str = "src/transformation/souffle/souffle_ffi_template.rs";
 
 fn create_program_list_file() -> BufWriter<File> {
     let list_file = File::create(PROGRAM_LIST_FILE).expect("Could not open program list file.");
+    let mut template_list_file = File::open(PROGRAM_LIST_TEMPLATE).expect("Could not open program list template file.");
+    let mut template = String::new();
+    template_list_file.read_to_string(&mut template).expect("Could not read template.");
     let mut writer = BufWriter::new(list_file);
-    writeln!(writer, "\
-#[cxx::bridge(namespace=\"souffle\")]
-mod programs_ffi {{\
-").expect("Could not write to program list file.");
+    write!(writer, "{}", template).expect("Could not write to program list file.");
     writer
 }
 
@@ -67,7 +68,7 @@ fn main() {
     }
     close_program_list_file(program_list_writer);
 
-    cxx_build::bridges(["src/transformation/souffle/mod.rs", "src/transformation/souffle/programs.rs"])
+    cxx_build::bridges(["src/transformation/souffle/souffle_ffi.rs"])
         .file("cpp_util/souffleUtil.hpp")
         .file("datalog_compiled/basic.cpp")
         .cpp(true)
@@ -76,5 +77,7 @@ fn main() {
         .define("__EMBEDDED_SOUFFLE__", None)
         .include(".")
         .compile("transProofSouffle");
+
+        println!("cargo:rerun-if-changed={}", "src/transformation/souffle_ffi_template.rs");
 
 }
