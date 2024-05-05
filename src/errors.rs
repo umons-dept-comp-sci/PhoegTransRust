@@ -1,9 +1,9 @@
+use crate::compute::LogInfo;
 use rayon;
 use std::any::Any;
 use std::io;
 use std::sync::mpsc;
 use thiserror::Error;
-use crate::compute::LogInfo;
 
 #[derive(Error, Debug)]
 pub enum TransProofError {

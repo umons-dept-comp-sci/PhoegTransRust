@@ -1,0 +1,36 @@
+.include "definitions.dl"
+
+Transformation("RelabelVertex").
+Transformation("RelabelEdge").
+
+.decl RelabelVertex(id:number, v:unsigned, ol:unsigned, nl:unsigned)
+.output RelabelVertex
+
+.decl RelabelEdge(id:number, v:unsigned, ol:unsigned, nl:unsigned)
+.output RelabelEdge
+
+RelabelVertex(ord(cat(to_string(vertex),":",to_string(oldLabel),":",to_string(newLabel))),vertex, oldLabel, newLabel):-
+    Vertex(vertex),
+    VertexLabel(newLabel),
+    VertexLabel(oldLabel),
+    VertexHasLabel(vertex, oldLabel),
+    oldLabel != newLabel.
+
+AddVertexLabel_("RelabelVertex", id, vertex, label):-
+    RelabelVertex(id, vertex, _, label).
+
+RemoveVertexLabel_("RelabelVertex", id, vertex, label):-
+    RelabelVertex(id, vertex, label, _).
+
+RelabelEdge(ord(cat(to_string(edge),":",to_string(oldLabel),":",to_string(newLabel))),edge, oldLabel, newLabel):-
+    Edge(edge, _, _),
+    EdgeLabel(newLabel),
+    EdgeLabel(oldLabel),
+    EdgeHasLabel(edge, oldLabel),
+    oldLabel != newLabel.
+
+AddEdgeLabel_("RelabelEdge", id, edge, label):-
+    RelabelEdge(id, edge, _, label).
+
+RemoveEdgeLabel_("RelabelEdge", id, edge, label):-
+    RelabelEdge(id, edge, label, _).

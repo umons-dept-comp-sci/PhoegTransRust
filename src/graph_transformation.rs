@@ -6,7 +6,7 @@ use crate::property_graph::PropertyGraph;
 
 #[derive(Debug)]
 pub struct GraphTransformation {
-    pub init : PropertyGraph,
+    pub init: PropertyGraph,
     pub result: PropertyGraph,
     pub mapping_init_vertex: HashMap<NodeIndex, NodeIndex>,
     pub mapping_init_edge: HashMap<EdgeIndex, EdgeIndex>,
@@ -17,12 +17,12 @@ pub struct GraphTransformation {
 impl From<&PropertyGraph> for GraphTransformation {
     fn from(g: &PropertyGraph) -> Self {
         let mut res = GraphTransformation {
-            init : g.clone(),
-            result : g.clone(),
-            mapping_init_edge : HashMap::with_capacity(g.graph.edge_count()),
-            mapping_init_vertex : HashMap::with_capacity(g.graph.node_count()),
-            mapping_result_edge : HashMap::with_capacity(g.graph.edge_count()),
-            mapping_result_vertex : HashMap::with_capacity(g.graph.node_count())
+            init: g.clone(),
+            result: g.clone(),
+            mapping_init_edge: HashMap::with_capacity(g.graph.edge_count()),
+            mapping_init_vertex: HashMap::with_capacity(g.graph.node_count()),
+            mapping_result_edge: HashMap::with_capacity(g.graph.edge_count()),
+            mapping_result_vertex: HashMap::with_capacity(g.graph.node_count()),
         };
         for vertex in g.graph.node_indices() {
             res.mapping_init_vertex.insert(vertex, vertex);

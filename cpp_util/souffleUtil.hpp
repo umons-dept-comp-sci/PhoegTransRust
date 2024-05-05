@@ -40,6 +40,12 @@ namespace souffle
         return res;
     }
 
+    int32_t getSigned(const souffle::tuple* t) {
+        souffle::RamSigned res;
+        ((souffle::tuple &)*t) >> res;
+        return res;
+    }
+
     std::unique_ptr<std::string> getText(const souffle::tuple* t) {
         std::unique_ptr<std::string> res = std::make_unique<std::string>();
         ((souffle::tuple &)*t) >> *res;

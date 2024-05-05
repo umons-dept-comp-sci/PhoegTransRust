@@ -1,20 +1,20 @@
-mod property_graph;
-mod parsing;
 pub mod compute;
 mod errors;
+mod graph_transformation;
+mod parsing;
+mod property_graph;
 mod transformation;
 mod utils;
-mod graph_transformation;
 
 use docopt::Docopt;
-use log::{debug, warn, error};
+use log::{debug, error, warn};
 use serde::Deserialize;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
-use std::convert::TryInto;
 
 use compute::*;
 use errors::*;
@@ -35,9 +35,9 @@ These graphs have to be given in graph6 format from the input (one signature per
 result is outputed in csv format.
 
 Usage:
-    transrust [options] <transformations>...
+    transrust [options] <program> <transformations>...
     transrust (-h | --help)
-    transrust --transfos
+    transrust <program> --transfos
 
 Options:
     -h, --help             Show this message.
@@ -64,47 +64,13 @@ struct Args {
     flag_i: String,
     flag_o: String,
     flag_s: usize,
+    arg_program: String,
     arg_transformations: Vec<String>,
     flag_t: usize,
     flag_c: usize,
     flag_append: bool,
 }
 
-fn init_transfo(lst: &[String]) -> TransfoVec {
-    lst.iter().map(|x| x.as_str().try_into()).inspect(|res| {
-        if let Err(e) = res {
-            warn!("{}", e);
-        }
-    })
-    .filter_map(Result::ok)
-    .collect()
-    //if lst.is_empty() {
-        //return Vec::new();
-    //}
-    //let mut transfo = Transformation::from_name(&lst[0]);
-    //let mut i = 1;
-    //while transfo.is_none() && i < lst.len() {
-        //warn!("Unknown transformation : {}.", lst[i - 1]);
-        //transfo = Transformation::from_name(&lst[i]);
-        //i += 1;
-    //}
-    //if transfo.is_some() {
-        //let mut ttrs;
-        //while i < lst.len() {
-            //ttrs = Transformation::from_name(&lst[i]);
-            //if let Some(ttrs_val) = ttrs {
-                //match transfo.as_mut() {
-                    //Some(t) => *t += ttrs_val,
-                    //None => panic!("Should not happen."),
-                //}
-            //} else {
-                //warn!("Unknown transformation : {}", lst[i]);
-            //}
-            //i += 1;
-        //}
-    //}
-    //transfo
-}
 
 fn main() -> Result<(), TransProofError> {
     // Parsing args
@@ -113,9 +79,37 @@ fn main() -> Result<(), TransProofError> {
         .unwrap_or_else(|e| e.exit());
     let verbose = args.flag_v;
 
-    if args.flag_transfos {
-        print_transfos();
-        std::process::exit(0);
+    let prog = souffle::create_program_instance(&args.arg_program);
+    let mut transfos : Vec<&str> = vec![];
+    if prog.is_null() {
+        error!("Unknown program: {}", args.arg_program);
+        panic!("Unknown program: {}", args.arg_program);
+    } else {
+        if args.flag_transfos {
+            if let Some(transfos) = souffle::get_transfos(prog) {
+                for transfo in transfos {
+                    println!("{}", transfo);
+                }
+                std::process::exit(0);
+            } else {
+                error!("No relation Transformation found.");
+                std::process::exit(1);
+            }
+        } else {
+            for transfo in args.arg_transformations.iter() {
+                if souffle::has_relation(prog, transfo) {
+                    transfos.push(transfo);
+                } else {
+                    warn!("No relation named {}.", transfo);
+                }
+            }
+        }
+        souffle::free_program(prog);
+    }
+
+    if transfos.is_empty() {
+        error!("No transformation found.");
+        panic!("No transformation found.");
     }
 
     // Init logger
@@ -131,17 +125,17 @@ fn main() -> Result<(), TransProofError> {
     let filename = args.flag_i;
     let outfilename = args.flag_o;
     let buffer = args.flag_s;
-    let transfos = args.arg_transformations;
     let num_threads = args.flag_t;
     let channel_size = args.flag_c;
     let append = args.flag_append;
+    let program = args.arg_program;
 
     // Init filters
     let deftest = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
         as_filter(|_| true, |_| "".to_string())(&x)
     });
     //let ftrs = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
-        //combine_filters(&deftest, trash_node)(&x)
+    //combine_filters(&deftest, trash_node)(&x)
     //});
 
     // Init input
@@ -170,20 +164,13 @@ fn main() -> Result<(), TransProofError> {
     let builder = thread::Builder::new();
     let whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
 
-    // Init transformations
-    let trs = init_transfo(&transfos);
-    if trs.is_empty() {
-        error!("No transformation found.");
-        panic!("No transformation found.");
-    }
-
     let v;
     let parser = PropertyGraphParser;
     let mut text = String::new();
     buf.read_to_string(&mut text)?;
     v = parser.convert_text(&text);
     if !v.is_empty() {
-        handle_graphs("basic", v, result_sender.clone(), &trs, deftest.clone())?;
+        handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone())?;
     }
     drop(result_sender);
     whandle.join().map_err(|x| TransProofError::Thread(x))??;

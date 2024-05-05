@@ -1,0 +1,42 @@
+.decl Vertex(id:unsigned)
+.input Vertex
+
+.decl VertexLabel(id:unsigned)
+.input VertexLabel
+
+.decl VertexHasLabel(elem:unsigned, label:unsigned)
+.input VertexHasLabel
+
+.decl VertexProperty(id:unsigned, name: symbol, value: symbol)
+.input VertexProperty
+
+.decl EdgeProperty(id:unsigned, name: symbol, value: symbol)
+.input EdgeProperty
+
+.decl Edge(id:unsigned, from:unsigned, to:unsigned)
+.input Edge
+
+.decl EdgeLabel(id:unsigned)
+.input EdgeLabel
+
+.decl EdgeHasLabel(elem:unsigned, label:unsigned)
+.input EdgeHasLabel
+
+.decl Transformation(name:symbol)
+.output Transformation
+
+.decl RemoveVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
+.input RemoveVertexLabel_
+.output RemoveVertexLabel_
+
+.decl AddVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
+.input AddVertexLabel_
+.output AddVertexLabel_
+
+.decl RemoveEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
+.input RemoveEdgeLabel_
+.output RemoveEdgeLabel_
+
+.decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
+.input AddEdgeLabel_
+.output AddEdgeLabel_

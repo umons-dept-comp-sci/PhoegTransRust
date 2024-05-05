@@ -12,7 +12,7 @@ use std::sync::mpsc::{Receiver, SendError, Sender, SyncSender};
 use std::sync::Arc;
 use std::time::Instant;
 
-use self::souffle::{create_program_instance, SouffleProgram};
+use self::souffle::{create_program_instance, Program};
 
 pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
 where
@@ -21,20 +21,18 @@ where
     ftrs(g)
 }
 
-
 /// Should apply a set of transformations, filter the graphs and return the result
-pub fn handle_graph<T, F>(
-    program : SouffleProgram,
+pub fn handle_graph<F>(
+    program: Program,
     g: PropertyGraph,
     t: &mut SenderVariant<LogInfo>,
-    trsf: &T,
+    trsf: &Vec<&str>,
     ftrs: Arc<F>,
 ) -> Result<(), TransProofError>
 where
-    T: Transformation,
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
-    let r = trsf.apply(program, &g);
+    let r = apply_transformations(program, trsf, &g);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
@@ -45,15 +43,14 @@ where
 }
 
 /// Should apply a set of transformations, filter the graphs and return the result
-pub fn handle_graphs<T, F>(
-    program_name : &str,
+pub fn handle_graphs<F>(
+    program_name: &str,
     v: Vec<PropertyGraph>,
     t: SenderVariant<LogInfo>,
-    trsf: &T,
+    trsf: &Vec<&str>,
     ftrs: Arc<F>,
 ) -> Result<(), TransProofError>
 where
-    T: Transformation,
     F: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
 {
     let init = || {
@@ -66,7 +63,6 @@ where
     })?;
     Ok(())
 }
-
 
 #[derive(Debug)]
 pub enum LogInfo {
@@ -113,7 +109,7 @@ pub fn output(
             } => {
                 i += 1;
                 bufout.write_all(&format!("{}", g).into_bytes())?;
-                bufout.write_all(&format!(",{},{}\n",v1,v2).into_bytes())?;
+                bufout.write_all(&format!(",{},{}\n", v1, v2).into_bytes())?;
             }
             LogInfo::LocalExtremum(g) => {
                 bufout.write_all(&format!("{:?}\n", g).into_bytes())?;

@@ -1,7 +1,15 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, ops::AddAssign};
 use std::hash::Hash;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::Display,
+    ops::AddAssign,
+};
 
-use petgraph::{algo::is_isomorphic_matching, graph::{DiGraph, EdgeIndex, NodeIndex}, stable_graph::StableDiGraph};
+use petgraph::{
+    algo::is_isomorphic_matching,
+    graph::{DiGraph, EdgeIndex, NodeIndex},
+    stable_graph::StableDiGraph,
+};
 use thiserror::Error;
 
 type Label = String;
@@ -96,12 +104,11 @@ where
         self.labels.keys()
     }
 
-    pub fn has_label(&self, element: &E, label : LabelId) -> bool {
+    pub fn has_label(&self, element: &E, label: LabelId) -> bool {
         self.labels_map
             .get(element)
-            .and_then(|set| {
-                Some(set.contains(&label))
-            } ).unwrap_or(false)
+            .and_then(|set| Some(set.contains(&label)))
+            .unwrap_or(false)
     }
 
     pub fn element_labels(&self, element: &E) -> impl Iterator<Item = &LabelId> {
@@ -168,7 +175,11 @@ where
         Ok(())
     }
 
-    pub fn remove_label_mapping(&mut self, element: &E, labelid: LabelId) -> Result<(), LabelError> {
+    pub fn remove_label_mapping(
+        &mut self,
+        element: &E,
+        labelid: LabelId,
+    ) -> Result<(), LabelError> {
         if !self.labels.contains_key(&labelid) {
             return Err(LabelError::UnknownLabelId(labelid));
         }
@@ -198,19 +209,24 @@ where
 
 #[derive(Debug, Clone)]
 pub struct Properties {
-   pub name : String,
-   pub map : HashMap<String, String>,
+    pub name: String,
+    pub map: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PropertyGraph {
     pub graph: StableDiGraph<Properties, Properties, u32>,
-    pub vertex_label : LabelMap<NodeIndex>,
-    pub edge_label : LabelMap<EdgeIndex>,
+    pub vertex_label: LabelMap<NodeIndex>,
+    pub edge_label: LabelMap<EdgeIndex>,
 }
 
 impl PropertyGraph {
-    fn display_label_prop(&self, f: &mut std::fmt::Formatter<'_>, labels : &Vec<&String>, props : &Properties) -> std::fmt::Result {
+    fn display_label_prop(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        labels: &Vec<&String>,
+        props: &Properties,
+    ) -> std::fmt::Result {
         write!(f, "{}:", props.name)?;
         let mut start = true;
         for label in labels {
@@ -225,7 +241,7 @@ impl PropertyGraph {
         start = true;
         for (key, typ) in props.map.iter() {
             if start {
-                start = false; 
+                start = false;
             } else {
                 write!(f, ", ")?;
             }
@@ -235,10 +251,15 @@ impl PropertyGraph {
     }
 
     fn build_isomorphic_input(&self) -> DiGraph<IsomorphismData, IsomorphismData> {
-        let mut graph: DiGraph<IsomorphismData, IsomorphismData> = DiGraph::with_capacity(self.graph.node_count(), 0);
+        let mut graph: DiGraph<IsomorphismData, IsomorphismData> =
+            DiGraph::with_capacity(self.graph.node_count(), 0);
         let mut vertex_map = HashMap::new();
         self.graph.node_indices().for_each(|index| {
-            let labels: HashSet<String> = self.vertex_label.element_labels(&index).map(|label| self.vertex_label.get_label(*label).unwrap().clone()).collect();
+            let labels: HashSet<String> = self
+                .vertex_label
+                .element_labels(&index)
+                .map(|label| self.vertex_label.get_label(*label).unwrap().clone())
+                .collect();
             let props = self.graph.node_weight(index).unwrap();
             vertex_map.insert(index, graph.add_node(Some((&props.map, labels))));
         });
@@ -246,10 +267,19 @@ impl PropertyGraph {
             let (self_node_from, self_node_to) = self.graph.edge_endpoints(edge).unwrap();
             let graph_from = *vertex_map.get(&self_node_from).unwrap();
             let graph_to = *vertex_map.get(&self_node_to).unwrap();
-            let labels: HashSet<String> = self.edge_label.element_labels(&edge).map(|label| self.edge_label.get_label(*label).unwrap().clone()).collect();
+            let labels: HashSet<String> = self
+                .edge_label
+                .element_labels(&edge)
+                .map(|label| self.edge_label.get_label(*label).unwrap().clone())
+                .collect();
             let props = self.graph.edge_weight(edge).unwrap();
             let data = Some((&props.map, labels));
-            if self.graph.edges_connecting(self_node_from, self_node_to).count() > 1 {
+            if self
+                .graph
+                .edges_connecting(self_node_from, self_node_to)
+                .count()
+                > 1
+            {
                 let inter_node = graph.add_node(None);
                 graph.add_edge(graph_from, inter_node, data);
                 graph.add_edge(inter_node, graph_to, None);
@@ -259,18 +289,26 @@ impl PropertyGraph {
         });
         graph
     }
-    
-    pub fn is_isomorphic(&self, other : &PropertyGraph) -> bool {
-        let data_match = |data_left : &IsomorphismData, data_right: &IsomorphismData| {
-            data_left == data_right
-        };
-        is_isomorphic_matching(&self.build_isomorphic_input(), &other.build_isomorphic_input(), data_match, data_match)
+
+    pub fn is_isomorphic(&self, other: &PropertyGraph) -> bool {
+        let data_match =
+            |data_left: &IsomorphismData, data_right: &IsomorphismData| data_left == data_right;
+        is_isomorphic_matching(
+            &self.build_isomorphic_input(),
+            &other.build_isomorphic_input(),
+            data_match,
+            data_match,
+        )
     }
 }
 
 impl Default for PropertyGraph {
     fn default() -> Self {
-        Self { graph: Default::default(), vertex_label: Default::default(), edge_label: Default::default() }
+        Self {
+            graph: Default::default(),
+            vertex_label: Default::default(),
+            edge_label: Default::default(),
+        }
     }
 }
 
@@ -281,7 +319,11 @@ impl Display for PropertyGraph {
         for vertex in self.graph.node_indices() {
             let props = self.graph.node_weight(vertex).unwrap();
             names.insert(vertex, props.name.clone());
-            let labels = self.vertex_label.element_labels(&vertex).map(|id| self.vertex_label.get_label(*id).unwrap()).collect();
+            let labels = self
+                .vertex_label
+                .element_labels(&vertex)
+                .map(|id| self.vertex_label.get_label(*id).unwrap())
+                .collect();
             write!(f, "( ")?;
             self.display_label_prop(f, &labels, props)?;
             writeln!(f, " )")?;
@@ -289,28 +331,33 @@ impl Display for PropertyGraph {
         for edge in self.graph.edge_indices() {
             let (from, to) = self.graph.edge_endpoints(edge).unwrap();
             let props = self.graph.edge_weight(edge).unwrap();
-            let labels = self.edge_label.element_labels(&edge).map(|id| self.edge_label.get_label(*id).unwrap()).collect();
+            let labels = self
+                .edge_label
+                .element_labels(&edge)
+                .map(|id| self.edge_label.get_label(*id).unwrap())
+                .collect();
             writeln!(f, "(:{})", names.get(&from).unwrap())?;
             write!(f, "  -[")?;
             self.display_label_prop(f, &labels, props)?;
             writeln!(f, " ]->")?;
             writeln!(f, "(:{})", names.get(&to).unwrap())?;
         }
-        writeln!(f,"}}")
+        writeln!(f, "}}")
     }
 }
-
 
 #[cfg(test)]
 mod test {
     use std::{collections::HashSet, iter::FromIterator};
 
-    use crate::{parsing::PropertyGraphParser, property_graph::{IdManager, LabelMap}};
-
+    use crate::{
+        parsing::PropertyGraphParser,
+        property_graph::{IdManager, LabelMap},
+    };
 
     #[test]
     fn test_id_manager() {
-        let mut manager : IdManager<usize> = Default::default();
+        let mut manager: IdManager<usize> = Default::default();
         assert_eq!(0, manager.get_id());
         assert_eq!(1, manager.get_id());
         assert_eq!(2, manager.get_id());
@@ -329,13 +376,13 @@ mod test {
 
     #[test]
     fn create_delete_unasigned_labels() {
-        let mut map : LabelMap<usize> = Default::default();
+        let mut map: LabelMap<usize> = Default::default();
         let id = map.add_label("test1".to_string());
         assert_eq!(id, *map.get_id(&("test1".to_string())).unwrap());
         assert_eq!(None, map.get_id(&("test2".to_string())));
         assert_eq!("test1".to_string(), *map.get_label(id).unwrap());
-        assert_eq!(None, map.get_label(id+1));
-        assert!(map.delete_label(id+1).is_err());
+        assert_eq!(None, map.get_label(id + 1));
+        assert!(map.delete_label(id + 1).is_err());
         assert!(map.delete_label(id).is_ok());
         assert!(map.delete_label(id).is_err());
         assert_eq!(None, map.get_id(&("test1".to_string())));
@@ -344,11 +391,19 @@ mod test {
 
     #[test]
     fn label_iterator_test() {
-        let mut map : LabelMap<u32> = Default::default();
-        let mut labels : HashSet<String> = HashSet::from_iter(["test1".to_string(), "test2".to_string(), "test3".to_string()].into_iter());
-        let mut ids : HashSet<u32> = labels.iter().map(|label| {
-            map.add_label(label.clone())
-        }).collect();
+        let mut map: LabelMap<u32> = Default::default();
+        let mut labels: HashSet<String> = HashSet::from_iter(
+            [
+                "test1".to_string(),
+                "test2".to_string(),
+                "test3".to_string(),
+            ]
+            .into_iter(),
+        );
+        let mut ids: HashSet<u32> = labels
+            .iter()
+            .map(|label| map.add_label(label.clone()))
+            .collect();
         assert_eq!(3, ids.len());
         map.labels().for_each(|id| {
             assert!(ids.remove(id));
@@ -358,18 +413,18 @@ mod test {
 
     #[test]
     fn test_change_label() {
-        let mut map : LabelMap<usize> = Default::default();
+        let mut map: LabelMap<usize> = Default::default();
         let id = map.add_label("label".to_string());
         map.change_label(id, "new_label".to_string()).unwrap();
         assert_eq!(None, map.get_id(&"label".to_string()));
         assert_eq!(id, *map.get_id(&"new_label".to_string()).unwrap());
         assert_eq!("new_label".to_string(), *map.get_label(id).unwrap());
-        assert!(map.change_label(id+1, "label".to_string()).is_err());
+        assert!(map.change_label(id + 1, "label".to_string()).is_err());
     }
 
     #[test]
     fn test_adding_removing_element_labels() {
-        let mut map : LabelMap<usize> = Default::default();
+        let mut map: LabelMap<usize> = Default::default();
         let id1 = map.add_label("label1".to_string());
         let id2 = map.add_label("label2".to_string());
         let id3 = map.add_label("label3".to_string());
@@ -377,25 +432,35 @@ mod test {
         map.add_label_mapping(&0, id3).unwrap();
         map.add_label_mapping(&1, id2).unwrap();
         map.add_label_mapping(&2, id1).unwrap();
-        assert!(map.add_label_mapping(&2, id1+id2+id3+1).is_err());
+        assert!(map.add_label_mapping(&2, id1 + id2 + id3 + 1).is_err());
 
-        let lab0 : Vec<_> = map.element_labels(&0).collect();
-        assert!((lab0[0] == &id1 || lab0[0] == &id3) && (lab0[1] == &id1 || lab0[1] == &id3) && lab0[0] != lab0[1] && lab0.len() == 2);
-        let lab1 : Vec<_> = map.element_labels(&1).collect();
+        let lab0: Vec<_> = map.element_labels(&0).collect();
+        assert!(
+            (lab0[0] == &id1 || lab0[0] == &id3)
+                && (lab0[1] == &id1 || lab0[1] == &id3)
+                && lab0[0] != lab0[1]
+                && lab0.len() == 2
+        );
+        let lab1: Vec<_> = map.element_labels(&1).collect();
         assert!(lab1[0] == &id2 && lab1.len() == 1);
-        let lab2 : Vec<_> = map.element_labels(&2).collect();
+        let lab2: Vec<_> = map.element_labels(&2).collect();
         assert!(lab2[0] == &id1 && lab2.len() == 1);
         assert!(map.element_labels(&4).next().is_none());
 
-        let el1 : Vec<_> = map.label_elements(id1).collect();
-        assert!((el1[0] == &0 || el1[0] == &2) && (el1[1] == &0 || el1[1] == &2) && el1[0] != el1[1] && el1.len() == 2);
-        let el2 : Vec<_> = map.label_elements(id2).collect();
+        let el1: Vec<_> = map.label_elements(id1).collect();
+        assert!(
+            (el1[0] == &0 || el1[0] == &2)
+                && (el1[1] == &0 || el1[1] == &2)
+                && el1[0] != el1[1]
+                && el1.len() == 2
+        );
+        let el2: Vec<_> = map.label_elements(id2).collect();
         assert!(el2[0] == &1 && el2.len() == 1);
-        let el3 : Vec<_> = map.label_elements(id3).collect();
+        let el3: Vec<_> = map.label_elements(id3).collect();
         assert!(el3[0] == &0 && el3.len() == 1);
 
         map.remove_label_mapping(&0, id3).unwrap();
-        let lab0 : Vec<_> = map.element_labels(&0).collect();
+        let lab0: Vec<_> = map.element_labels(&0).collect();
         assert!(lab0[0] == &id1 && lab0.len() == 1);
         assert!(map.remove_label_mapping(&0, id3).is_ok());
 
@@ -410,7 +475,7 @@ mod test {
 
     #[test]
     fn test_remove_element() {
-        let mut map : LabelMap<usize> = Default::default();
+        let mut map: LabelMap<usize> = Default::default();
         let id1 = map.add_label("label1".to_string());
         let id2 = map.add_label("label2".to_string());
         map.add_label_mapping(&0, id1).unwrap();

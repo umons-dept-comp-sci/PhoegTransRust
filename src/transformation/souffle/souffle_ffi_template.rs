@@ -3,7 +3,7 @@ pub use souffle_ffi::*;
 #[cxx::bridge(namespace = "souffle")]
 pub mod souffle_ffi {
     unsafe extern "C++" {
-        include!("/usr/local/include/souffle/SouffleInterface.h");
+        include!("/usr/include/souffle/SouffleInterface.h");
 
         type SouffleProgram;
         type ProgramFactory;
@@ -30,6 +30,7 @@ pub mod souffle_ffi {
         fn getNext(iter: &mut UniquePtr<TupleIterator>) -> *const tuple;
 
         unsafe fn getNumber(t: *const tuple) -> u32;
+        unsafe fn getSigned(t: *const tuple) -> i32;
         unsafe fn getText(t : *const tuple) -> UniquePtr<CxxString>;
 
         unsafe fn purgeProgram(prog: *mut SouffleProgram);
