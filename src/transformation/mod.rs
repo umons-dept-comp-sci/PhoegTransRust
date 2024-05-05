@@ -12,13 +12,34 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-static OPERATIONS : [OperationName; 2] = [OperationName::RemoveVertexLabel, OperationName::AddVertexLabel];
+static OPERATIONS : [OperationName; 12] = [
+    OperationName::RemoveEdgeProperty,
+    OperationName::RemoveEdgeLabel,
+    OperationName::RemoveEdge,
+    OperationName::RemoveVertexProperty,
+    OperationName::RemoveVertexLabel,
+    OperationName::RemoveVertex,
+    OperationName::AddVertex,
+    OperationName::AddVertexLabel,
+    OperationName::AddVertexProperty,
+    OperationName::AddEdge,
+    OperationName::AddEdgeLabel,
+    OperationName::AddEdgeProperty,
+];
 
 pub enum Operation {
     AddVertexLabel(u32, u32),
     RemoveVertexLabel(u32,u32),
     AddEdgeLabel(u32, u32),
     RemoveEdgeLabel(u32,u32),
+    AddVertex(u32),
+    RemoveVertex(u32),
+    AddEdge(u32,u32,u32),
+    RemoveEdge(u32),
+    AddVertexProperty(u32, String, String),
+    RemoveVertexProperty(u32,String),
+    AddEdgeProperty(u32, String, String),
+    RemoveEdgeProperty(u32,String),
 }
 
 impl Operation {
@@ -36,18 +57,34 @@ impl Operation {
                     .remove_label_mapping(&((*v).into()), *l)
                     .unwrap();
             },
-            Self::AddEdgeLabel(v, l) => {
+            Self::AddEdgeLabel(e, l) => {
                 g.result
                     .edge_label
-                    .add_label_mapping(&((*v).into()), *l)
+                    .add_label_mapping(&((*e).into()), *l)
                     .unwrap();
             },
-            Self::RemoveEdgeLabel(v, l) => {
+            Self::RemoveEdgeLabel(e, l) => {
                 g.result
                     .edge_label
-                    .remove_label_mapping(&((*v).into()), *l)
+                    .remove_label_mapping(&((*e).into()), *l)
                     .unwrap();
-            }
+            },
+            Self::AddVertex(v) => {
+            },
+            Self::RemoveVertex(v) => {
+            },
+            Self::AddEdge(e, start, end) => {
+            },
+            Self::RemoveEdge(e) => {
+            },
+            Self::AddVertexProperty(v, name, value) => {
+            },
+            Self::RemoveVertexProperty(v, name) => {
+            },
+            Self::AddEdgeProperty(e, name, value) => {
+            },
+            Self::RemoveEdgeProperty(e, name) => {
+            },
         }
     }
 }
@@ -57,6 +94,14 @@ enum OperationName {
     RemoveVertexLabel,
     AddEdgeLabel,
     RemoveEdgeLabel,
+    AddVertex,
+    RemoveVertex,
+    AddEdge,
+    RemoveEdge,
+    AddVertexProperty,
+    RemoveVertexProperty,
+    AddEdgeProperty,
+    RemoveEdgeProperty,
 }
 
 impl OperationName {
@@ -66,6 +111,14 @@ impl OperationName {
             Self::RemoveVertexLabel => "RemoveVertexLabel_",
             Self::AddEdgeLabel => "AddEdgeLabel_",
             Self::RemoveEdgeLabel => "RemoveEdgeLabel_",
+            Self::AddVertex => "AddVertex_",
+            Self::RemoveVertex => "RemoveVertex_",
+            Self::AddEdge => "AddEdge_",
+            Self::RemoveEdge => "RemoveEdge_",
+            Self::AddVertexProperty => "AddVertexProperty_",
+            Self::RemoveVertexProperty => "RemoveVertexProperty_",
+            Self::AddEdgeProperty => "AddEdgeProperty_",
+            Self::RemoveEdgeProperty => "RemoveEdgeProperty_",
         }
     }
 }

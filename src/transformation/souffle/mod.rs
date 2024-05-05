@@ -192,25 +192,67 @@ impl OperationName {
         unsafe {
         match self {
                 Self::AddVertexLabel => {
-                    let vertex = getNumber(t);
-                    let label = getNumber(t);
+                    let vertex = extract_number(t);
+                    let label = extract_number(t);
                     Operation::AddVertexLabel(vertex, label)
                 },
                 Self::RemoveVertexLabel => {
-                    let vertex = getNumber(t);
-                    let label = getNumber(t);
+                    let vertex = extract_number(t);
+                    let label = extract_number(t);
                     Operation::RemoveVertexLabel(vertex, label)
 
                 },
                 Self::AddEdgeLabel => {
-                    let edge = getNumber(t);
-                    let label = getNumber(t);
+                    let edge = extract_number(t);
+                    let label = extract_number(t);
                     Operation::AddEdgeLabel(edge, label)
                 },
                 Self::RemoveEdgeLabel => {
-                    let edge = getNumber(t);
-                    let label = getNumber(t);
+                    let edge = extract_number(t);
+                    let label = extract_number(t);
                     Operation::RemoveEdgeLabel(edge, label)
+                },
+                Self::AddVertex => {
+                    let vertex = extract_number(t);
+                    Operation::AddVertex(vertex)
+                },
+                Self::RemoveVertex => {
+                    let vertex = extract_number(t);
+                    Operation::RemoveVertex(vertex)
+
+                },
+                Self::AddEdge => {
+                    let edge = extract_number(t);
+                    let from = extract_number(t);
+                    let to = extract_number(t);
+                    Operation::AddEdge(edge, from, to)
+                },
+                Self::RemoveEdge => {
+                    let edge = extract_number(t);
+                    Operation::RemoveEdge(edge)
+                },
+                Self::AddVertexProperty => {
+                    let vertex = extract_number(t);
+                    let name = extract_text(t);
+                    let value = extract_text(t);
+                    Operation::AddVertexProperty(vertex, name, value)
+                },
+                Self::RemoveVertexProperty => {
+                    let vertex = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::RemoveVertexProperty(vertex, name)
+
+                },
+                Self::AddEdgeProperty => {
+                    let edge = extract_number(t);
+                    let name = extract_text(t);
+                    let value = extract_text(t);
+                    Operation::AddEdgeProperty(edge, name, value)
+                },
+                Self::RemoveEdgeProperty => {
+                    let edge = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::RemoveEdgeProperty(edge, name)
                 },
             }
         }

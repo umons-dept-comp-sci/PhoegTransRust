@@ -40,3 +40,35 @@
 .decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
 .input AddEdgeLabel_
 .output AddEdgeLabel_
+
+.decl RemoveVertex_(transfo:symbol, id:number, vertex:unsigned)
+.input RemoveVertex_
+.output RemoveVertex_
+
+.decl AddVertex_(transfo:symbol, id:number, vertex:unsigned)
+.input AddVertex_
+.output AddVertex_
+
+.decl RemoveEdge_(transfo:symbol, id:number, edge:unsigned)
+.input RemoveEdge_
+.output RemoveEdge_
+
+.decl AddEdge_(transfo:symbol, id:number, edge:unsigned)
+.input AddEdge_
+.output AddEdge_
+
+.decl RemoveVertexProperty_(transfo:symbol, id:number, vertex:unsigned, name: symbol)
+.input RemoveVertexProperty_
+.output RemoveVertexProperty_
+
+.decl AddVertexProperty_(transfo:symbol, id:number, vertex:unsigned, name:symbol, value:symbol)
+.input AddVertexProperty_
+.output AddVertexProperty_
+
+.decl RemoveEdgeProperty_(transfo:symbol, id:number, edge:unsigned, name:symbol)
+.input RemoveEdgeProperty_
+.output RemoveEdgeProperty_
+
+.decl AddEdgeProperty_(transfo:symbol, id:number, edge:unsigned, name:symbol, value:symbol)
+.input AddEdgeProperty_
+.output AddEdgeProperty_
