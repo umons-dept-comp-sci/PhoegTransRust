@@ -1,12 +1,15 @@
 use crate::errors::TransProofError;
-use crate::property_graph::PropertyGraph;
+use crate::property_graph::{PropertyGraph, Properties};
 use crate::souffle::extract_text;
 use crate::transformation::souffle::extract_number;
 use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
 use lazy_static::lazy_static;
+use log::error;
+use petgraph::stable_graph::{NodeIndex, EdgeIndex};
 use petgraph::visit::NodeIndexable;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::net::ToSocketAddrs;
 
 use self::souffle::Program;
 
@@ -42,48 +45,94 @@ pub enum Operation {
     RemoveEdgeProperty(u32,String),
 }
 
+fn get_node_index(id : &u32, node_map: &HashMap<u32, NodeIndex<u32>>) -> NodeIndex<u32> {
+    *node_map.get(&id).unwrap_or(&(*id).into())
+}
+
+fn get_edge_index(id : &u32, edge_map: &HashMap<u32, EdgeIndex<u32>>) -> EdgeIndex<u32> {
+    *edge_map.get(&id).unwrap_or(&(*id).into())
+}
+
 impl Operation {
-    fn apply(&self, g: &mut GraphTransformation) {
+    fn apply(&self, g: &mut GraphTransformation, node_map: &mut HashMap<u32, NodeIndex<u32>>, edge_map: &mut HashMap<u32, EdgeIndex<u32>>) {
         match self {
             Self::AddVertexLabel(v, l) => {
                 g.result
                     .vertex_label
-                    .add_label_mapping(&((*v).into()), *l)
+                    .add_label_mapping(&get_node_index(v, node_map), *l)
                     .unwrap();
             },
             Self::RemoveVertexLabel(v, l) => {
                 g.result
                     .vertex_label
-                    .remove_label_mapping(&((*v).into()), *l)
+                    .remove_label_mapping(&get_node_index(v, node_map), *l)
                     .unwrap();
             },
             Self::AddEdgeLabel(e, l) => {
                 g.result
                     .edge_label
-                    .add_label_mapping(&((*e).into()), *l)
+                    .add_label_mapping(&get_edge_index(e, edge_map), *l)
                     .unwrap();
             },
             Self::RemoveEdgeLabel(e, l) => {
                 g.result
                     .edge_label
-                    .remove_label_mapping(&((*e).into()), *l)
+                    .remove_label_mapping(&get_edge_index(e, edge_map), *l)
                     .unwrap();
             },
             Self::AddVertex(v) => {
+                let index = get_node_index(v, node_map);
+                if g.result.graph.contains_node(index) {
+                    error!("Node {v} already exists.");
+                    panic!("Node {v} already exists.");
+                } else {
+                    //TODO Need a name when creating a node.
+                    let real_index = g.result.graph.add_node(Properties {
+                        name : "".to_string(),
+                        map : HashMap::new()
+                    });
+                    node_map.insert(*v, real_index);
+                }
             },
             Self::RemoveVertex(v) => {
+                let index = get_node_index(v, node_map);
+                g.result.vertex_label.remove_element(&index);
+                g.result.graph.remove_node(index);
+                node_map.remove(v);
             },
             Self::AddEdge(e, start, end) => {
+                let index = get_edge_index(e, edge_map);
+                if g.result.graph.edge_weight(index).is_some() {
+                    error!("Edge {e} already exists.");
+                    panic!("Edge {e} already exists.");
+                } else {
+                    //TODO Need a name when creating an edge.
+                    let n1 = get_node_index(start, node_map);
+                    let n2 = get_node_index(end, node_map);
+                    let real_index = g.result.graph.add_edge(n1, n2, Properties {
+                        name : "".to_string(),
+                        map : HashMap::new()
+                    });
+                    edge_map.insert(*e, real_index);
+                }
             },
             Self::RemoveEdge(e) => {
+                let index = get_edge_index(e, edge_map);
+                g.result.edge_label.remove_element(&index);
+                g.result.graph.remove_edge(index);
+                edge_map.remove(e);
             },
             Self::AddVertexProperty(v, name, value) => {
+                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}")).map.insert(name.to_string(), value.to_string());
             },
             Self::RemoveVertexProperty(v, name) => {
+                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}")).map.remove(name);
             },
             Self::AddEdgeProperty(e, name, value) => {
+                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).map.insert(name.to_string(), value.to_string());
             },
             Self::RemoveEdgeProperty(e, name) => {
+                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).map.remove(name);
             },
         }
     }
@@ -128,8 +177,10 @@ pub fn apply_single_transformation(program: Program, rel_name: &str, g: &Propert
     let operations = souffle::generate_operations(program, rel_name, g);
     for transfo in operations.values() {
         let mut ng : GraphTransformation = g.into();
+        let mut node_map = HashMap::new();
+        let mut edge_map = HashMap::new();
         for operation in transfo {
-            operation.apply(&mut ng);
+            operation.apply(&mut ng, &mut node_map, &mut edge_map);
         }
         res.push(ng);
     }

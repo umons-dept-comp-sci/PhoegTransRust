@@ -24,18 +24,19 @@ pub fn create_program_instance(name: &str) -> Program {
 }
 
 pub fn get_transfos(prog: Program) -> Option<Vec<String>> {
-    if let Some(rel_transfo) = get_relation(prog, "Transformation") {
-        let mut names = vec![];
-        unsafe {
+    unsafe {
+        souffle_ffi::runProgram(prog);
+        if let Some(rel_transfo) = get_relation(prog, "Transformation") {
+            let mut names = vec![];
             let mut iter = souffle_ffi::createTupleIterator(rel_transfo);
             while souffle_ffi::hasNext(&iter) {
                 let tup = souffle_ffi::getNext(&mut iter);
                 names.push(extract_text(tup));
             }
+            Some(names)
+        } else {
+            None
         }
-        Some(names)
-    } else {
-        None
     }
 }
 
