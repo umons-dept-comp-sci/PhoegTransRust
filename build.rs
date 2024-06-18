@@ -17,25 +17,28 @@ fn create_program_list_file() -> BufWriter<File> {
         .read_to_string(&mut template)
         .expect("Could not read template.");
     let mut writer = BufWriter::new(list_file);
-    write!(writer, "{}", template).expect("Could not write to program list file.");
+    write!(writer, "{}\n", template).expect("Could not write to program list file.");
     writer
 }
 
-fn close_program_list_file(mut writer: BufWriter<File>) {
-    write!(writer, "}}").expect("Could not write to program list file.");
+fn close_program_list_file(mut _writer: BufWriter<File>) {
+    // write!(writer, "}}").expect("Could not write to program list file.");
 }
 
 fn register_program(writer: &mut BufWriter<File>, filepath: PathBuf, name: &str) {
     writeln!(
         writer,
         "
+#[cxx::bridge(namespace = \"{name}\")]
+pub mod {name}_ffi {{
     unsafe extern \"C++\" {{
-        include!(\"{}\");
-        type factory_Sf_{};
-    }}\
+        include!(\"{file}\");
+        type factory_Sf_{name};
+    }}
+}}\
 ",
-        filepath.to_str().expect("Invalid path."),
-        name
+        file=filepath.to_str().expect("Invalid path."),
+        name=name
     )
     .expect("Could not write to program list file.");
 }
@@ -80,6 +83,8 @@ fn main() {
                 if !std::process::Command::new("souffle")
                     .arg("-g")
                     .arg(&outpath)
+                    .arg("-N")
+                    .arg(progname.clone())
                     .arg(path)
                     .output()
                     .expect("Could not find souffle.")
