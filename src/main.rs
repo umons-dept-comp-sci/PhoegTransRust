@@ -5,6 +5,7 @@ mod parsing;
 mod property_graph;
 mod transformation;
 mod utils;
+mod neo4j;
 
 use docopt::Docopt;
 use log::{debug, error, warn};
@@ -55,6 +56,7 @@ Options:
                            issues even while setting a smaller output buffer and batch size.
                            [default: 0]
     -a, --append           Does not overwrite output file but appends results instead.
+    --neo4j                Writes the output in a Neo4j database. Incompatible with -o.
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -69,6 +71,7 @@ struct Args {
     flag_t: usize,
     flag_c: usize,
     flag_append: bool,
+    flag_neo4j : bool,
 }
 
 
@@ -129,6 +132,12 @@ fn main() -> Result<(), TransProofError> {
     let channel_size = args.flag_c;
     let append = args.flag_append;
     let program = args.arg_program;
+    let neo4j = args.flag_neo4j;
+
+    if (outfilename != "-" || append) && neo4j {
+        error!("Option --neo4j is not compatible with -o or -a.");
+        panic!("Option --neo4j is not compatible with -o or -a.");
+    }
 
     // Init filters
     let deftest = Arc::new(|ref x: &GraphTransformation| -> Result<String, ()> {
@@ -162,7 +171,12 @@ fn main() -> Result<(), TransProofError> {
         result_receiver = result_chan.1;
     }
     let builder = thread::Builder::new();
-    let whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
+    let whandle;
+    if neo4j {
+        whandle = builder.spawn(move || output_neo4j(result_receiver))?;
+    } else {
+        whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
+    }
 
     let v;
     let parser = PropertyGraphParser;

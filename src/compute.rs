@@ -75,6 +75,54 @@ pub enum LogInfo {
     LocalExtremum(PropertyGraph),
 }
 
+fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runtime::Runtime) {
+    let tx = rt.block_on(db.start_txn()).unwrap();
+}
+
+pub fn output_neo4j(
+    receiver: Receiver<LogInfo>,
+) -> Result<(), TransProofError> {
+    //TODO remove the unwraps
+    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+    let mut neograph = runtime.block_on(neo4rs::Graph::new("http://localhost:7887", "", "")).unwrap();
+    let start = Instant::now();
+    let mut i = 0;
+    for log in receiver.iter() {
+        match log {
+            LogInfo::Transfo(t, s) => {
+                i += 1;
+                // bufout.write_all(&format!("{}", t).into_bytes())?;
+                // bufout.write_all(&s.into_bytes())?;
+                // bufout.write_all(&['\n' as u8])?;
+            }
+            LogInfo::IncorrectTransfo {
+                result: g,
+                before: v1,
+                after: v2,
+            } => {
+                i += 1;
+                // bufout.write_all(&format!("{}", g).into_bytes())?;
+                // bufout.write_all(&format!(",{},{}\n", v1, v2).into_bytes())?;
+            }
+            LogInfo::LocalExtremum(g) => {
+                // bufout.write_all(&format!("{:?}\n", g).into_bytes())?;
+            }
+        }
+    }
+    let duration = start.elapsed();
+    info!("Done : {} transformation{}", i, plural(i));
+    let secs = duration.as_secs() as usize;
+    let millis = (duration.subsec_nanos() as usize) / (1e6 as usize);
+    info!(
+        "Took {} second{} and {} millisecond{}",
+        secs,
+        plural(secs),
+        millis,
+        plural(millis)
+    );
+    Ok(())
+}
+
 pub fn output(
     receiver: Receiver<LogInfo>,
     filename: String,

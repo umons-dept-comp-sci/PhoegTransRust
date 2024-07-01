@@ -172,8 +172,6 @@ impl PropertyGraphParser {
 
 #[cfg(test)]
 mod test {
-    use crate::relabel_vertex;
-
     use super::PropertyGraphParser;
 
     #[test]
@@ -184,14 +182,14 @@ mod test {
 ( suspiciousType : Suspicious { reason STRING }) ,
 ( : customerType )
 -[ friendType : Knows & Likes {time INT} ] ->
-( : customerType )
+( : customerType ),
+( : suspiciousType )
+-[ aliasType {frequency INT} ] ->
+( : suspiciousType )
 }";
         let parser = PropertyGraphParser;
         let results = parser.convert_text(text);
         let g = results.get(0).unwrap();
         println!("{}", g);
-        for t in relabel_vertex(&g) {
-            println!("{:?}", t);
-        }
     }
 }

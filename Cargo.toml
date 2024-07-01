@@ -17,6 +17,8 @@ petgraph = "0.6.4"
 pest = "2.7.8"
 pest_derive = "2.7.8"
 cxx = { version = "1.0.119", features = ["c++17"] }
+neo4rs = "0.7.1"
+tokio = "1.38.0"
 
 [build-dependencies]
 cxx-build = "1.0.119"
