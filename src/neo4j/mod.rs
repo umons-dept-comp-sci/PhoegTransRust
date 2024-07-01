@@ -1,73 +1,119 @@
-use std::{borrow::Cow, hash::Hash};
+use std::{collections::HashMap, hash::{DefaultHasher, Hash, Hasher}, io::BufWriter};
+use std::io::Write;
 
-use petgraph::{graph::EdgeIndex, stable_graph::NodeIndex, visit::EdgeRef};
+use neo4rs::{query, Graph, Txn};
 
-use crate::property_graph::PropertyGraph;
+use crate::{graph_transformation::GraphTransformation, property_graph::{Properties, PropertyGraph}};
 
-pub fn generate_key(p: &PropertyGraph) -> String {
-    let mut node_names : Vec<(NodeIndex,Cow<str>)> = p.graph.node_indices().map(|n| (n,Cow::from(&p.graph.node_weight(n).unwrap().name))).collect();
-    node_names.sort_by(|(_, name1), (_, name2)| name1.cmp(name2));
-    //TODO check for duplicates
-    let key = node_names.into_iter().fold(String::new(), |mut buff, (node_id,node_name)| {
-        buff += node_name.as_ref();
-        let mut edges : Vec<Cow<str>> = p.graph.edges_directed(node_id, petgraph::EdgeDirection::Outgoing).map(|e| Cow::from(&e.weight().name)).collect();
-        if !edges.is_empty() {
-            buff += ":";
-            edges.sort();
-            buff += &edges.join(",");
+async fn get_or_create_metanode(key: u64, conn: &mut Txn) -> bool {
+    let query = query(
+"
+with timestamp() as time
+merge (n:Meta {key:$key})
+on create
+set n.created = time
+return time = n.created as created
+").param("key", key as i64);
+    let mut data = conn.execute(query).await.unwrap();
+    let row = data.next(conn.handle()).await.unwrap().unwrap();
+    row.get("created").unwrap()
+}
+
+fn display_label_prop(
+    out: &mut BufWriter<Vec<u8>>,
+    labels: &Vec<&String>,
+    props: &Properties,
+    edge: bool
+) {
+    write!(out, "{}", props.name);
+    let mut start = true;
+    for label in labels {
+        if !start && edge {
+            write!(out, "_");
+        } else {
+            write!(out, ":");
+            start = false;
         }
-        buff += ";";
-        buff
-    });
-    key
-}
-
-fn hash_edge<H: std::hash::Hasher>(edge_name: Cow<str>, edge_id: EdgeIndex, g: &PropertyGraph, state: &mut H) {
-    edge_name.hash(state);
-    let mut props : Vec<(Cow<str>, Cow<str>)> = g.graph.edge_weight(edge_id).unwrap().map.iter().map(|(k,v)| (Cow::from(k), Cow::from(v))).collect();
-    props.sort();
-    props.into_iter().for_each(|(k,v)| {k.hash(state); v.hash(state)} );
-    let mut labels : Vec<Cow<str>> = g.edge_label.element_labels(&edge_id).map(|id| Cow::from(g.edge_label.get_label(*id).unwrap())).collect();
-    labels.sort();
-    labels.into_iter().for_each(|l| l.hash(state) );
-}
-
-fn hash_node<H: std::hash::Hasher>(node_name: Cow<str>, node_id: NodeIndex, g: &PropertyGraph, state: &mut H) {
-    node_name.hash(state);
-    let mut props : Vec<(Cow<str>, Cow<str>)> = g.graph.node_weight(node_id).unwrap().map.iter().map(|(k,v)| (Cow::from(k), Cow::from(v))).collect();
-    props.sort();
-    props.into_iter().for_each(|(k,v)| {k.hash(state); v.hash(state)} );
-    let mut labels : Vec<Cow<str>> = g.vertex_label.element_labels(&node_id).map(|id| Cow::from(g.vertex_label.get_label(*id).unwrap())).collect();
-    labels.sort();
-    labels.into_iter().for_each(|l| l.hash(state) );
-    let mut edges : Vec<(EdgeIndex,Cow<str>)> = g.graph.edges_directed(node_id, petgraph::EdgeDirection::Outgoing).map(|e| (e.id(), Cow::from(&e.weight().name))).collect();
-    edges.sort_by(|(_, name1), (_, name2)| name1.cmp(name2));
-    for (edge_id, edge_name) in edges.into_iter() {
-        hash_edge(edge_name, edge_id, g, state);
+        write!(out, "{}", label);
     }
+    write!(out, " {{ _name:\"{}\"", props.name);
+    for (key, typ) in props.map.iter() {
+        write!(out, ", ");
+        write!(out, "{}:\"{}\"", key, typ);
+    }
+    write!(out, " }}");
 }
 
-impl Hash for PropertyGraph {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let mut node_names : Vec<(NodeIndex,Cow<str>)> = self.graph.node_indices().map(|n| (n,Cow::from(&self.graph.node_weight(n).unwrap().name))).collect();
-        node_names.sort_by(|(_, name1), (_, name2)| name1.cmp(name2));
-        //TODO check for duplicates
-        for (node_id, node_name) in node_names.into_iter() {
-            hash_node(node_name, node_id, &self, state);
+fn create_property_graph_query(g: &PropertyGraph) -> String {
+    let mut out = BufWriter::new(Vec::new());
+    write!(out, "MATCH (_meta:Meta {{key:$key}}) CREATE ");
+    let mut names = HashMap::new();
+    let mut start = true;
+    for vertex in g.graph.node_indices() {
+        if start {
+           start = false;
+        } else {
+            write!(out, ", ");
         }
+        let props = g.graph.node_weight(vertex).unwrap();
+        names.insert(vertex, props.name.clone());
+        let labels = g
+            .vertex_label
+            .element_labels(&vertex)
+            .map(|id| g.vertex_label.get_label(*id).unwrap())
+            .collect();
+        write!(out, "( ");
+        display_label_prop(&mut out, &labels, props, false);
+        write!(out, " )");
     }
+    for edge in g.graph.edge_indices() {
+        let (from, to) = g.graph.edge_endpoints(edge).unwrap();
+        let props = g.graph.edge_weight(edge).unwrap();
+        let labels = g
+            .edge_label
+            .element_labels(&edge)
+            .map(|id| g.edge_label.get_label(*id).unwrap())
+            .collect();
+        write!(out, ", ({})", names.get(&from).unwrap());
+        write!(out, "  -[");
+        display_label_prop(&mut out, &labels, props, true);
+        write!(out, " ]->");
+        write!(out, "({})", names.get(&to).unwrap());
+    }
+    for name in names.values() {
+        write!(out, ", (_meta)-[:Inner]->({})", name);
+    }
+    write!(out, ";");
+    String::from_utf8(out.into_inner().unwrap()).unwrap()
+}
+
+async fn write_property_graph(g: &PropertyGraph, conn: &Graph) {
+    let mut hash = DefaultHasher::new();
+    g.hash(&mut hash);
+    let key = hash.finish();
+    let mut tx = conn.start_txn().await.unwrap();
+    if get_or_create_metanode(key, &mut tx).await {
+        let query = query(&dbg!(create_property_graph_query(g))).param("key", key as i64);
+        tx.run(query).await.unwrap();
+    }
+    tx.commit().await.unwrap();
+}
+
+pub async fn write_graph_transformation(gt: &GraphTransformation, conn: &Graph) {
+    let first = &gt.init;
+    write_property_graph(first, conn).await;
+    let second = &gt.result;
+    write_property_graph(second, conn).await;
 }
 
 #[cfg(test)]
-mod test {
-    use std::hash::{DefaultHasher, Hash, Hasher};
-
+mod tests {
     use crate::parsing::PropertyGraphParser;
 
-    use super::generate_key;
+    use super::*;
 
     #[test]
-    fn smoke_test() {
+    fn test_name() {
         let text = "CREATE GRAPH TYPE fraudGraphType {
 ( personType : Person { name STRING , birthday DATE }) ,
 ( customerType : Person & Customer { name STRING , since DATE }) ,
@@ -82,12 +128,6 @@ mod test {
         let parser = PropertyGraphParser;
         let results = parser.convert_text(text);
         let g = results.get(0).unwrap();
-        let key = generate_key(g);
-        let expected = "customerType:aliasType,friendType;personType;suspiciousType;";
-        assert_eq!(key, expected);
-        let mut h = DefaultHasher::new();
-        g.hash(&mut h);
-        println!("{}", h.finish());
         let text = "CREATE GRAPH TYPE fraudGraphType {
 ( personType : Person { name STRING , birthday DATE }) ,
 ( customerType : Person & Customer { name STRING , since DATE }) ,
@@ -102,9 +142,6 @@ mod test {
         let parser = PropertyGraphParser;
         let results = parser.convert_text(text);
         let g = results.get(0).unwrap();
-        let mut h = DefaultHasher::new();
-        g.hash(&mut h);
-        println!("{}", h.finish());
         panic!()
     }
 }

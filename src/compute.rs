@@ -1,5 +1,6 @@
 use crate::errors::*;
 use crate::graph_transformation::GraphTransformation;
+use crate::neo4j::write_graph_transformation;
 use crate::property_graph::PropertyGraph;
 use crate::transformation::*;
 use crate::utils::plural;
@@ -84,13 +85,14 @@ pub fn output_neo4j(
 ) -> Result<(), TransProofError> {
     //TODO remove the unwraps
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
-    let mut neograph = runtime.block_on(neo4rs::Graph::new("http://localhost:7887", "", "")).unwrap();
+    let mut neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
     let start = Instant::now();
     let mut i = 0;
     for log in receiver.iter() {
         match log {
             LogInfo::Transfo(t, s) => {
                 i += 1;
+                runtime.block_on(write_graph_transformation(&t, &neograph));
                 // bufout.write_all(&format!("{}", t).into_bytes())?;
                 // bufout.write_all(&s.into_bytes())?;
                 // bufout.write_all(&['\n' as u8])?;
