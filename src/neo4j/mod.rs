@@ -19,22 +19,26 @@ return time = n.created as created
     row.get("created").unwrap()
 }
 
-fn display_label_prop(
+fn format_data(
     out: &mut BufWriter<Vec<u8>>,
     labels: &Vec<&String>,
     props: &Properties,
     edge: bool
 ) {
     write!(out, "{}", props.name);
-    let mut start = true;
-    for label in labels {
-        if !start && edge {
-            write!(out, "_");
-        } else {
-            write!(out, ":");
-            start = false;
+    if edge && labels.is_empty() {
+        write!(out, ":Internal");
+    } else {
+        let mut start = true;
+        for label in labels {
+            if !start && edge {
+                write!(out, "_");
+            } else {
+                write!(out, ":");
+                start = false;
+            }
+            write!(out, "{}", label);
         }
-        write!(out, "{}", label);
     }
     write!(out, " {{ _name:\"{}\"", props.name);
     for (key, typ) in props.map.iter() {
@@ -63,7 +67,7 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
             .map(|id| g.vertex_label.get_label(*id).unwrap())
             .collect();
         write!(out, "( ");
-        display_label_prop(&mut out, &labels, props, false);
+        format_data(&mut out, &labels, props, false);
         write!(out, " )");
     }
     for edge in g.graph.edge_indices() {
@@ -76,7 +80,7 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
             .collect();
         write!(out, ", ({})", names.get(&from).unwrap());
         write!(out, "  -[");
-        display_label_prop(&mut out, &labels, props, true);
+        format_data(&mut out, &labels, props, true);
         write!(out, " ]->");
         write!(out, "({})", names.get(&to).unwrap());
     }
@@ -87,23 +91,35 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
     String::from_utf8(out.into_inner().unwrap()).unwrap()
 }
 
-async fn write_property_graph(g: &PropertyGraph, conn: &Graph) {
+async fn write_property_graph(g: &PropertyGraph, conn: &Graph) -> u64 {
     let mut hash = DefaultHasher::new();
     g.hash(&mut hash);
     let key = hash.finish();
     let mut tx = conn.start_txn().await.unwrap();
     if get_or_create_metanode(key, &mut tx).await {
-        let query = query(&dbg!(create_property_graph_query(g))).param("key", key as i64);
+        let query = query(&create_property_graph_query(g)).param("key", key as i64);
         tx.run(query).await.unwrap();
     }
     tx.commit().await.unwrap();
+    key
+}
+
+fn build_meta_edge_query(first_key : u64, second_key : u64, gt: &GraphTransformation) -> String {
+    let start =
+"
+MATCH (n1: Meta {key:$first_key}), (n2: Meta {key:$second_key})
+CREATE (n1) -[:Meta]-> (n2);
+";
+    start.to_string()
 }
 
 pub async fn write_graph_transformation(gt: &GraphTransformation, conn: &Graph) {
     let first = &gt.init;
-    write_property_graph(first, conn).await;
+    let first_key = write_property_graph(first, conn).await;
     let second = &gt.result;
-    write_property_graph(second, conn).await;
+    let second_key = write_property_graph(second, conn).await;
+    let query = query(&build_meta_edge_query(first_key, second_key, gt)).param("first_key", first_key as i64).param("second_key", second_key as i64);
+    conn.run(query).await.unwrap();
 }
 
 #[cfg(test)]

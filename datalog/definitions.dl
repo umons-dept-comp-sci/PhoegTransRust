@@ -53,7 +53,7 @@
 .input RemoveEdge_
 .output RemoveEdge_
 
-.decl AddEdge_(transfo:symbol, id:number, edge:unsigned)
+.decl AddEdge_(transfo:symbol, id:number, edge:unsigned, from:unsigned, to:unsigned)
 .input AddEdge_
 .output AddEdge_
 
