@@ -255,6 +255,26 @@ impl OperationName {
                     let name = extract_text(t);
                     Operation::RemoveEdgeProperty(edge, name)
                 },
+                Self::RenameVertex => {
+                    let vertex = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::RenameVertex(vertex, name)
+                },
+                Self::RenameEdge => {
+                    let edge = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::RenameEdge(edge, name)
+                },
+                Self::MoveEdgeTarget => {
+                    let edge = extract_number(t);
+                    let target = extract_number(t);
+                    Operation::MoveEdgeTarget(edge, target)
+                },
+                Self::MoveEdgeSource => {
+                    let edge = extract_number(t);
+                    let source = extract_number(t);
+                    Operation::MoveEdgeSource(edge, source)
+                },
             }
         }
     }

@@ -72,3 +72,19 @@
 .decl AddEdgeProperty_(transfo:symbol, id:number, edge:unsigned, name:symbol, value:symbol)
 .input AddEdgeProperty_
 .output AddEdgeProperty_
+
+.decl RenameVertex_(transfo:symbol, id:number, vertex:unsigned, name:symbol)
+.input RenameVertex_
+.output RenameVertex_
+
+.decl RenameEdge_(transfo:symbol, id:number, edge:unsigned, name:symbol)
+.input RenameEdge_
+.output RenameEdge_
+
+.decl MoveEdgeTarget_(transfo:symbol, id:number, edge:unsigned, target:unsigned)
+.input MoveEdgeTarget_
+.output MoveEdgeTarget_
+
+.decl MoveEdgeSource_(transfo:symbol, id:number, edge:unsigned, source:unsigned)
+.input MoveEdgeSource_
+.output MoveEdgeSource_

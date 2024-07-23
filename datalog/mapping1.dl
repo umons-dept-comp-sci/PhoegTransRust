@@ -1,0 +1,24 @@
+.include "definitions.dl"
+
+Transformation("Mapping1").
+
+.decl Mapping1()
+.output Mapping1
+
+RenameVertex_("Donator","Sponsor"):-
+    Vertex("Donator").
+
+AddVertexProperty_("Team","leader",V):-
+    Vertex("Leader"),
+    Vertex("Team"),
+    Edge("Manages","Leader","Team"),
+    VertexProperty("Leader","name",V).
+
+MoveEdgeSource_("Spends","Team"):-
+    Vertex("Leader"),
+    Vertex("Team"),
+    Edge("Manages","Leader","Team"),
+    Edge("Spends","Leader",_).
+
+RemoveVertex_("Leader"):-
+    Vertex("Leader").

@@ -15,7 +15,7 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-static OPERATIONS : [OperationName; 12] = [
+static OPERATIONS : [OperationName; 16] = [
     OperationName::RemoveEdgeProperty,
     OperationName::RemoveEdgeLabel,
     OperationName::RemoveEdge,
@@ -28,6 +28,10 @@ static OPERATIONS : [OperationName; 12] = [
     OperationName::AddEdge,
     OperationName::AddEdgeLabel,
     OperationName::AddEdgeProperty,
+    OperationName::MoveEdgeTarget,
+    OperationName::MoveEdgeSource,
+    OperationName::RenameVertex,
+    OperationName::RenameEdge,
 ];
 
 pub enum Operation {
@@ -43,6 +47,10 @@ pub enum Operation {
     RemoveVertexProperty(u32,String),
     AddEdgeProperty(u32, String, String),
     RemoveEdgeProperty(u32,String),
+    RenameVertex(u32,String),
+    RenameEdge(u32,String),
+    MoveEdgeTarget(u32,u32),
+    MoveEdgeSource(u32,u32),
 }
 
 fn get_node_index(id : &u32, node_map: &HashMap<u32, NodeIndex<u32>>) -> NodeIndex<u32> {
@@ -134,6 +142,34 @@ impl Operation {
             Self::RemoveEdgeProperty(e, name) => {
                 g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).map.remove(name);
             },
+            Self::RenameVertex(v, name) => {
+                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown node {v}")).name = name.to_string();
+            },
+            Self::RenameEdge(e, name) => {
+                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).name = name.to_string();
+            },
+            Self::MoveEdgeTarget(e,t) => {
+                let edgeindex = get_edge_index(e, edge_map);
+                let src = g.result.graph.edge_endpoints(edgeindex).unwrap().0;
+                let target = get_node_index(t, node_map);
+                let w = g.result.graph.remove_edge(edgeindex).unwrap();
+                let real_index = g.result.graph.add_edge(src, target, w);
+                let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
+                labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
+                g.result.edge_label.remove_element(&edgeindex);
+                edge_map.insert(*e, real_index);
+            },
+            Self::MoveEdgeSource(e,s) => {
+                let edgeindex = get_edge_index(e, edge_map);
+                let target = g.result.graph.edge_endpoints(edgeindex).unwrap().1;
+                let src = get_node_index(s, node_map);
+                let w = g.result.graph.remove_edge(edgeindex).unwrap();
+                let real_index = g.result.graph.add_edge(src, target, w);
+                let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
+                labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
+                g.result.edge_label.remove_element(&edgeindex);
+                edge_map.insert(*e, real_index);
+            },
         }
     }
 }
@@ -151,6 +187,10 @@ enum OperationName {
     RemoveVertexProperty,
     AddEdgeProperty,
     RemoveEdgeProperty,
+    RenameVertex,
+    RenameEdge,
+    MoveEdgeTarget,
+    MoveEdgeSource,
 }
 
 impl OperationName {
@@ -168,6 +208,10 @@ impl OperationName {
             Self::RemoveVertexProperty => "RemoveVertexProperty_",
             Self::AddEdgeProperty => "AddEdgeProperty_",
             Self::RemoveEdgeProperty => "RemoveEdgeProperty_",
+            Self::RenameVertex => "RenameVertex_",
+            Self::RenameEdge => "RenameEdge_",
+            Self::MoveEdgeTarget => "MoveEdgeTarget_",
+            Self::MoveEdgeSource => "MoveEdgeSource_",
         }
     }
 }
