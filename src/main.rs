@@ -12,7 +12,7 @@ use log::{debug, error, warn};
 use serde::Deserialize;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{stdin, BufRead, BufReader};
+use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
@@ -24,6 +24,7 @@ use utils::*;
 
 use crate::graph_transformation::GraphTransformation;
 use crate::parsing::PropertyGraphParser;
+use crate::property_graph::PropertyGraph;
 
 // (-f <filter>)...
 // -f <filter>            The filters \
@@ -44,7 +45,7 @@ Options:
     -h, --help             Show this message.
     -v, --verbose          Shows more information.
     --transfos             Shows a list of available transformations.
-    -i, --input <input>    File containing the graph6 signatures. Uses the standard input if '-'.
+    -i, --input <input>    File containing the input schemas. Uses the standard input if '-'.
                            [default: -]
     -o, --output <output>  File where to write the result. Uses the standard output if '-'.
                            [default: -]
@@ -57,6 +58,7 @@ Options:
                            [default: 0]
     -a, --append           Does not overwrite output file but appends results instead.
     --neo4j                Writes the output in a Neo4j database. Incompatible with -o.
+    --target <target>      File containing the target schema.
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -72,6 +74,7 @@ struct Args {
     flag_c: usize,
     flag_append: bool,
     flag_neo4j : bool,
+    flag_target: Option<String>,
 }
 
 
@@ -133,6 +136,19 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
     let program = args.arg_program;
     let neo4j = args.flag_neo4j;
+    let target_graph: Option<PropertyGraph> = args.flag_target.map(|fname| -> Result<PropertyGraph, std::io::Error> {
+        let mut buf = BufReader::new(File::open(fname)?);
+        let mut text = String::new();
+        buf.read_to_string(&mut text)?;
+        let parser = PropertyGraphParser;
+        let mut v = parser.convert_text(&text);
+        if v.len() != 1 {
+            error!("Only one target schema is supported. Found {}.", v.len());
+            panic!("Only one target schema is supported. Found {}.", v.len());
+        }
+        let target = v.drain(0..1).next().unwrap();
+        Ok(target)
+    }).transpose().unwrap();
 
     if (outfilename != "-" || append) && neo4j {
         error!("Option --neo4j is not compatible with -o or -a.");
