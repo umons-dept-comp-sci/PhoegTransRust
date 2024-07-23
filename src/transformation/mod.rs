@@ -16,12 +16,6 @@ use self::souffle::Program;
 pub mod souffle;
 
 static OPERATIONS : [OperationName; 16] = [
-    OperationName::RemoveEdgeProperty,
-    OperationName::RemoveEdgeLabel,
-    OperationName::RemoveEdge,
-    OperationName::RemoveVertexProperty,
-    OperationName::RemoveVertexLabel,
-    OperationName::RemoveVertex,
     OperationName::AddVertex,
     OperationName::AddVertexLabel,
     OperationName::AddVertexProperty,
@@ -32,6 +26,12 @@ static OPERATIONS : [OperationName; 16] = [
     OperationName::MoveEdgeSource,
     OperationName::RenameVertex,
     OperationName::RenameEdge,
+    OperationName::RemoveEdgeProperty,
+    OperationName::RemoveEdgeLabel,
+    OperationName::RemoveEdge,
+    OperationName::RemoveVertexProperty,
+    OperationName::RemoveVertexLabel,
+    OperationName::RemoveVertex,
 ];
 
 pub enum Operation {

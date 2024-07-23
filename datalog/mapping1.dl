@@ -30,10 +30,10 @@
 
 Transformation("Mapping1").
 
-.decl Mapping1(name: symbol, id: number, Dv: unsigned, Sv: unsigned, Tv: unsigned, lp: symbol, Lv: unsigned, Me: unsigned, np: symbol, Se: unsigned)
+.decl Mapping1(id: number, Dv: unsigned, Sv: unsigned, Tv: unsigned, lp: symbol, Lv: unsigned, Me: unsigned, np: symbol, Se: unsigned)
 .output Mapping1
 
-Mapping1("Mapping1", autoinc(), Dv, Sv, Tv, lp, Lv, Me, np, Se):-
+Mapping1(autoinc(), Dv, Sv, Tv, lp, Lv, Me, np, Se):-
     Vertex(Dv),
     Vertex(Tv),
     TargetVertex(Sv),
@@ -43,27 +43,27 @@ Mapping1("Mapping1", autoinc(), Dv, Sv, Tv, lp, Lv, Me, np, Se):-
     VertexProperty(_, np, _),
     Edge(Se, _, _).
 
-RenameVertex_(Name, Id, Dv, Svn):-
+RenameVertex_("Mapping1", Id, Dv, Svn):-
     Vertex(Dv),
     TargetVertex(Sv),
     TargetVertexName(Sv,Svn),
-    Mapping1(Name, Id, Dv, Sv, _, _, _, _, _, _).
+    Mapping1(Id, Dv, Sv, _, _, _, _, _, _).
 
-AddVertexProperty_(Name, Id, Tv,lp,V):-
+AddVertexProperty_("Mapping1", Id, Tv,lp,V):-
     Vertex(Lv),
     Vertex(Tv),
     Edge(Me,Lv,Tv),
     VertexProperty(Lv,np,V),
     TargetVertexProperty(_, lp, _),
-    Mapping1(Name, Id, _, _, Tv, lp, Lv, Me, np, _).
+    Mapping1(Id, _, _, Tv, lp, Lv, Me, np, _).
 
-MoveEdgeSource_(Name, Id, Se,Tv):-
+MoveEdgeSource_("Mapping1", Id, Se,Tv):-
     Vertex(Lv),
     Vertex(Tv),
     Edge(Me,Lv,Tv),
     Edge(Se,Lv,_),
-    Mapping1(Name, Id, _, _, Tv, _, Lv, Me, _, Se).
+    Mapping1(Id, _, _, Tv, _, Lv, Me, _, Se).
 
-RemoveVertex_(Name, Id, Lv):-
+RemoveVertex_("Mapping1", Id, Lv):-
     Vertex(Lv),
-    Mapping1(Name, Id, _, _, _, _, Lv, _, _, _).
+    Mapping1(Id, _, _, _, _, Lv, _, _, _).

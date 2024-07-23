@@ -142,7 +142,6 @@ fn main() -> Result<(), TransProofError> {
         buf.read_to_string(&mut text)?;
         let parser = PropertyGraphParser;
         let mut v = parser.convert_text(&text);
-        println!("{}",v.len());
         if v.len() != 1 {
             error!("Only one target schema is supported. Found {}.", v.len());
             panic!("Only one target schema is supported. Found {}.", v.len());
