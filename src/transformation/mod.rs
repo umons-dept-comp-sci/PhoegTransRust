@@ -216,9 +216,9 @@ impl OperationName {
     }
 }
 
-pub fn apply_single_transformation(program: Program, rel_name: &str, g: &PropertyGraph) -> Vec<GraphTransformation> {
+pub fn apply_single_transformation(program: Program, rel_name: &str, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> Vec<GraphTransformation> {
     let mut res = vec![];
-    let operations = souffle::generate_operations(program, rel_name, g);
+    let operations = souffle::generate_operations(program, rel_name, g, target_graph);
     for transfo in operations.values() {
         let mut ng : GraphTransformation = g.into();
         let mut node_map = HashMap::new();
@@ -231,8 +231,8 @@ pub fn apply_single_transformation(program: Program, rel_name: &str, g: &Propert
     res
 }
 
-pub fn apply_transformations(program: Program, rel_names: &Vec<&str>, g: &PropertyGraph) -> Vec<GraphTransformation> {
-    rel_names.iter().flat_map(|name| apply_single_transformation(program, name, g)).collect()
+pub fn apply_transformations(program: Program, rel_names: &Vec<&str>, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> Vec<GraphTransformation> {
+    rel_names.iter().flat_map(|name| apply_single_transformation(program, name, g, target_graph)).collect()
 }
 
 /*

@@ -360,8 +360,11 @@ impl OperationName {
     }
 }
 
-pub fn generate_operations(program: Program, relation_name: &str, g: &PropertyGraph) -> HashMap<i32, Vec<Operation>> {
+pub fn generate_operations(program: Program, relation_name: &str, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> HashMap<i32, Vec<Operation>> {
     encode_input_graph(program, g);
+    if let Some(target) = target_graph {
+        encode_target_graph(program, target);
+    }
     unsafe {
         souffle_ffi::runProgram(program);
         let out_relation = get_relation(program, relation_name)

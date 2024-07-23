@@ -12,13 +12,15 @@ pub struct PropertyGraphParser;
 
 impl PropertyGraphParser {
     pub fn convert_text(&self, input: &str) -> Vec<PropertyGraph> {
-        PropertyGraphParser::parse(Rule::schemas, input)
+        let mut res : Vec<PropertyGraph> = PropertyGraphParser::parse(Rule::schemas, input)
             .unwrap()
             .next()
             .unwrap()
             .into_inner()
             .map(|v| self.build_graph(v))
-            .collect()
+            .collect();
+        res.pop();
+        res
     }
 
     pub fn build_graph(&self, v: Pair<'_, Rule>) -> PropertyGraph {
@@ -191,5 +193,6 @@ mod test {
         let results = parser.convert_text(text);
         let g = results.get(0).unwrap();
         println!("{}", g);
+        println!("{}", results.len());
     }
 }

@@ -142,6 +142,7 @@ fn main() -> Result<(), TransProofError> {
         buf.read_to_string(&mut text)?;
         let parser = PropertyGraphParser;
         let mut v = parser.convert_text(&text);
+        println!("{}",v.len());
         if v.len() != 1 {
             error!("Only one target schema is supported. Found {}.", v.len());
             panic!("Only one target schema is supported. Found {}.", v.len());
@@ -200,7 +201,7 @@ fn main() -> Result<(), TransProofError> {
     buf.read_to_string(&mut text)?;
     v = parser.convert_text(&text);
     if !v.is_empty() {
-        handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone())?;
+        handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone(), target_graph)?;
     }
     drop(result_sender);
     whandle.join().map_err(|x| TransProofError::Thread(x))??;

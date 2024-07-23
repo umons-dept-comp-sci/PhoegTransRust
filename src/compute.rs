@@ -29,11 +29,12 @@ pub fn handle_graph<F>(
     t: &mut SenderVariant<LogInfo>,
     trsf: &Vec<&str>,
     ftrs: Arc<F>,
+    target_graph: &Option<PropertyGraph>,
 ) -> Result<(), TransProofError>
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
-    let r = apply_transformations(program, trsf, &g);
+    let r = apply_transformations(program, trsf, &g, target_graph);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
@@ -50,6 +51,7 @@ pub fn handle_graphs<F>(
     t: SenderVariant<LogInfo>,
     trsf: &Vec<&str>,
     ftrs: Arc<F>,
+    target_graph: Option<PropertyGraph>,
 ) -> Result<(), TransProofError>
 where
     F: Fn(&GraphTransformation) -> Result<String, ()> + Send + Sync,
@@ -60,7 +62,7 @@ where
         (t, prog)
     };
     v.into_par_iter().try_for_each_init(init, |mut s, x| {
-        handle_graph(s.1, x, &mut s.0, trsf, ftrs.clone())
+        handle_graph(s.1, x, &mut s.0, trsf, ftrs.clone(), &target_graph)
     })?;
     Ok(())
 }
