@@ -1,24 +1,68 @@
 .include "definitions.dl"
 
+//RenameVertex_("Donator","Sponsor"):-
+//    Vertex("Donator").
+//
+//AddVertexProperty_("Team","leader",V):-
+//    Vertex("Leader"),
+//    Vertex("Team"),
+//    Edge("Manages","Leader","Team"),
+//    VertexProperty("Leader","name",V).
+//
+//MoveEdgeSource_("Spends","Team"):-
+//    Vertex("Leader"),
+//    Vertex("Team"),
+//    Edge("Manages","Leader","Team"),
+//    Edge("Spends","Leader",_).
+//
+//RemoveVertex_("Leader"):-
+//    Vertex("Leader").
+//
+//Vars:
+//Donator: Vertex, Dv
+//Sponsor: Vertex, Sv
+//Team: Vertex, Tv
+//leader: Property, lp
+//Leader: Vertex, Lv
+//Manages: Edge, Me
+//name: Property, np
+//Spends: Edge, Se
+
 Transformation("Mapping1").
 
-.decl Mapping1()
+.decl Mapping1(name: symbol, id: number, Dv: unsigned, Sv: symbol, Tv: unsigned, lp: symbol, Lv: unsigned, Me: unsigned, np: symbol, Se: unsigned)
 .output Mapping1
 
-RenameVertex_("Donator","Sponsor"):-
-    Vertex("Donator").
+Mapping1("Mapping1", autoinc(), Dv, Sv, Tv, lp, Lv, Me, np, Se):-
+    Vertex(Dv),
+    Vertex(Sv),
+    TargetVertex(Tv),
+    TargetVertexProperty(_, lp, _),
+    Vertex(Lv),
+    Edge(Me, _, _),
+    VertexProperty(_, np, _),
+    Edge(Se, _, _).
 
-AddVertexProperty_("Team","leader",V):-
-    Vertex("Leader"),
-    Vertex("Team"),
-    Edge("Manages","Leader","Team"),
-    VertexProperty("Leader","name",V).
+RenameVertex_(Name, Id, Dv, Sv):-
+    Vertex(Dv),
+    TargetVertex(Sv),
+    Mapping1(Name, Id, Dv, Sv, _, _, _, _, _, _).
 
-MoveEdgeSource_("Spends","Team"):-
-    Vertex("Leader"),
-    Vertex("Team"),
-    Edge("Manages","Leader","Team"),
-    Edge("Spends","Leader",_).
+AddVertexProperty_(Name, Id, Tv,lp,V):-
+    Vertex(Lv),
+    Vertex(Tv),
+    Edge(Me,Lv,Tv),
+    VertexProperty(Lv,np,V),
+    TargetVertexProperty(_, lp, _),
+    Mapping1(Name, Id, _, _, Tv, lp, Lv, Me, np, _).
 
-RemoveVertex_("Leader"):-
-    Vertex("Leader").
+MoveEdgeSource_(Name, Id, Se,Tv):-
+    Vertex(Lv),
+    Vertex(Tv),
+    Edge(Me,Lv,Tv),
+    Edge(Se,Lv,_),
+    Mapping1(Name, Id, _, _, Tv, _, Lv, Me, _, Se).
+
+RemoveVertex_(Name, Id, Lv):-
+    Vertex(Lv),
+    Mapping1(Name, Id, _, _, _, _, Lv, _, _, _).
