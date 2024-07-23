@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::{self, read_dir, File};
 use std::io::{BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -43,7 +44,7 @@ pub mod {name}_ffi {{
     .expect("Could not write to program list file.");
 }
 
-fn main() {
+fn build() {
     let datalog_path = PathBuf::from(DATALOG_DIR)
         .canonicalize()
         .expect("No datalog directory.");
@@ -115,3 +116,13 @@ fn main() {
 }
 
 //fn main() {}
+
+fn main() {
+    let build_enabled = env::var("BUILD_ENABLED")
+        .map(|v| v == "1")
+        .unwrap_or(true); // run by default
+
+    if build_enabled {
+        build();
+    }
+}
