@@ -18,6 +18,36 @@ type Relation = *mut souffle_ffi::Relation;
 type InputTuple = UniquePtr<souffle_ffi::tuple>;
 pub type OutputTuple = *const souffle_ffi::tuple;
 
+const INPUT_RELATION_NAMES: [&'static str; 12] = [
+    "VertexLabel",
+    "VertexLabelName",
+    "Vertex",
+    "VertexName",
+    "VertexHasLabel",
+    "VertexProperty",
+    "EdgeLabel",
+    "EdgeLabelName",
+    "Edge",
+    "EdgeName",
+    "EdgeProperty",
+    "EdgeHasLabel",
+];
+
+const TARGET_RELATION_NAMES: [&'static str; 12] = [
+    "TargetVertexLabel",
+    "TargetVertexLabelName",
+    "TargetVertex",
+    "TargetVertexName",
+    "TargetVertexHasLabel",
+    "TargetVertexProperty",
+    "TargetEdgeLabel",
+    "TargetEdgeLabelName",
+    "TargetEdge",
+    "TargetEdgeName",
+    "TargetEdgeProperty",
+    "TargetEdgeHasLabel",
+];
+
 pub fn create_program_instance(name: &str) -> Program {
     let_cxx_string!(cname = name);
     souffle_ffi::newInstance(&cname)
@@ -78,10 +108,10 @@ where
     }
 }
 
-pub fn encode_graph(program: Program, graph: &PropertyGraph) {
+fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str; 12]) {
     fill_relation(
         program,
-        "VertexLabel",
+        relation_names[0],
         graph.vertex_label.labels(),
         |tup, id| {
             souffle_ffi::insertNumber(tup, *id);
@@ -89,7 +119,17 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "Vertex",
+        relation_names[1],
+        graph.vertex_label.labels().map(|id| (id, graph.vertex_label.get_label(*id).unwrap())),
+        |tup, (id, name)| {
+            souffle_ffi::insertNumber(tup, *id);
+            let_cxx_string!(cname=name);
+            souffle_ffi::insertText(tup, &cname);
+        },
+    );
+    fill_relation(
+        program,
+        relation_names[2],
         graph.graph.node_references(),
         |tup, node| {
             souffle_ffi::insertNumber(tup, node.id().index() as u32);
@@ -97,7 +137,18 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "VertexHasLabel",
+        relation_names[3],
+        graph.graph.node_references(),
+        |tup, node| {
+            souffle_ffi::insertNumber(tup, node.id().index() as u32);
+            let name = &node.weight().name;
+            let_cxx_string!(cname = name);
+            souffle_ffi::insertText(tup, &cname);
+        },
+    );
+    fill_relation(
+        program,
+        relation_names[4],
         graph
             .graph
             .node_indices()
@@ -109,7 +160,7 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "VertexProperty",
+        relation_names[5],
         graph.graph.node_indices().flat_map(|n| {
             let weight = graph.graph.node_weight(n).unwrap();
             std::iter::repeat(n)
@@ -126,7 +177,7 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "EdgeLabel",
+        relation_names[6],
         graph.edge_label.labels(),
         |tup, id| {
             souffle_ffi::insertNumber(tup, *id);
@@ -134,7 +185,17 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "Edge",
+        relation_names[7],
+        graph.edge_label.labels().map(|id| (id, graph.edge_label.get_label(*id).unwrap())),
+        |tup, (id, name)| {
+            souffle_ffi::insertNumber(tup, *id);
+            let_cxx_string!(cname=name);
+            souffle_ffi::insertText(tup, &cname);
+        },
+    );
+    fill_relation(
+        program,
+        relation_names[8],
         graph.graph.edge_references(),
         |tup, edge| {
             souffle_ffi::insertNumber(tup, edge.id().index() as u32);
@@ -144,7 +205,18 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "EdgeProperty",
+        relation_names[9],
+        graph.graph.edge_references(),
+        |tup, edge| {
+            souffle_ffi::insertNumber(tup, edge.id().index() as u32);
+            let name = &edge.weight().name;
+            let_cxx_string!(cname = name);
+            souffle_ffi::insertText(tup, &cname);
+        },
+    );
+    fill_relation(
+        program,
+        relation_names[10],
         graph.graph.edge_indices().flat_map(|n| {
             let weight = graph.graph.edge_weight(n).unwrap();
             std::iter::repeat(n)
@@ -161,7 +233,7 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
     );
     fill_relation(
         program,
-        "EdgeHasLabel",
+        relation_names[11],
         graph
             .graph
             .edge_indices()
@@ -171,6 +243,14 @@ pub fn encode_graph(program: Program, graph: &PropertyGraph) {
             souffle_ffi::insertNumber(tup, *label);
         },
     );
+}
+
+pub fn encode_input_graph(program: Program, graph: &PropertyGraph) {
+    encode_graph(program, graph, &INPUT_RELATION_NAMES);
+}
+
+pub fn encode_target_graph(program: Program, graph: &PropertyGraph) {
+    encode_graph(program, graph, &TARGET_RELATION_NAMES);
 }
 
 pub fn extract_number(tuple: OutputTuple) -> u32 {
@@ -281,7 +361,7 @@ impl OperationName {
 }
 
 pub fn generate_operations(program: Program, relation_name: &str, g: &PropertyGraph) -> HashMap<i32, Vec<Operation>> {
-    encode_graph(program, g);
+    encode_input_graph(program, g);
     unsafe {
         souffle_ffi::runProgram(program);
         let out_relation = get_relation(program, relation_name)
