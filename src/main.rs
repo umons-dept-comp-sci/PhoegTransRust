@@ -58,6 +58,7 @@ Options:
                            [default: 0]
     -a, --append           Does not overwrite output file but appends results instead.
     --neo4j                Writes the output in a Neo4j database. Incompatible with -o.
+    -L, --label <label>    Reads graphs from metanodes in Neo4j database having the given label. Incompatible with -i.
     --target <target>      File containing the target schema.
     ";
 
@@ -75,6 +76,7 @@ struct Args {
     flag_append: bool,
     flag_neo4j : bool,
     flag_target: Option<String>,
+    flag_L: Option<String>,
 }
 
 
@@ -136,6 +138,12 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
     let program = args.arg_program;
     let neo4j = args.flag_neo4j;
+    let label = args.flag_L;
+
+    if filename != "-" && label.is_some() {
+        error!("Option -L is not compatible with -i.");
+        panic!("Option -L is not compatible with -i.");
+    }
     let target_graph: Option<PropertyGraph> = args.flag_target.map(|fname| -> Result<PropertyGraph, std::io::Error> {
         let mut buf = BufReader::new(File::open(fname)?);
         let mut text = String::new();
@@ -195,10 +203,14 @@ fn main() -> Result<(), TransProofError> {
     }
 
     let v;
-    let parser = PropertyGraphParser;
-    let mut text = String::new();
-    buf.read_to_string(&mut text)?;
-    v = parser.convert_text(&text);
+    if label.is_some() {
+        v = neo4j::get_source_graphs(&label.unwrap());
+    } else {
+        let parser = PropertyGraphParser;
+        let mut text = String::new();
+        buf.read_to_string(&mut text)?;
+        v = parser.convert_text(&text);
+    }
     if !v.is_empty() {
         handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone(), target_graph)?;
     }

@@ -1,19 +1,27 @@
 use std::{collections::HashMap, hash::{DefaultHasher, Hash, Hasher}, io::BufWriter};
 use std::io::Write;
 
-use neo4rs::{query, Graph, Txn};
+use neo4rs::{query, Graph, Txn, Node, Relation};
 
 use crate::{graph_transformation::GraphTransformation, property_graph::{Properties, PropertyGraph}};
 
+const INTERNAL_LABEL: &str = "Internal";
+const META_LABEL: &str = "Meta";
+const INNER_LABEL: &str = "Inner";
+const SELECTED_LABEL: &str = "Selected";
+const CREATED_PROP: &str = "created";
+const KEY_PROP: &str = "key";
+const NAME_PROP: &str = "_name";
+
 async fn get_or_create_metanode(key: u64, conn: &mut Txn) -> bool {
     let query = query(
-"
+&format!("
 with timestamp() as time
-merge (n:Meta {key:$key})
+merge (n:{meta} {{{key}:$key}})
 on create
-set n.created = time
-return time = n.created as created
-").param("key", key as i64);
+set n.{created} = time
+return time = n.{created} as created
+",key=KEY_PROP, created=CREATED_PROP, meta=META_LABEL)).param("key", key as i64);
     let mut data = conn.execute(query).await.unwrap();
     let row = data.next(conn.handle()).await.unwrap().unwrap();
     row.get("created").unwrap()
@@ -27,7 +35,7 @@ fn format_data(
 ) {
     write!(out, "{}", props.name);
     if edge && labels.is_empty() {
-        write!(out, ":Internal");
+        write!(out, ":{}", INTERNAL_LABEL);
     } else {
         let mut start = true;
         for label in labels {
@@ -40,7 +48,7 @@ fn format_data(
             write!(out, "{}", label);
         }
     }
-    write!(out, " {{ _name:\"{}\"", props.name);
+    write!(out, " {{ {name}:\"{}\"", props.name, name=NAME_PROP);
     for (key, typ) in props.map.iter() {
         write!(out, ", ");
         write!(out, "{}:\"{}\"", key, typ);
@@ -50,7 +58,7 @@ fn format_data(
 
 fn create_property_graph_query(g: &PropertyGraph) -> String {
     let mut out = BufWriter::new(Vec::new());
-    write!(out, "MATCH (_meta:Meta {{key:$key}}) CREATE ");
+    write!(out, "MATCH (_meta:{meta} {{{key}:$key}}) CREATE ", meta=META_LABEL,key=KEY_PROP);
     let mut names = HashMap::new();
     let mut start = true;
     for vertex in g.graph.node_indices() {
@@ -85,7 +93,7 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
         write!(out, "({})", names.get(&to).unwrap());
     }
     for name in names.values() {
-        write!(out, ", (_meta)-[:Inner]->({})", name);
+        write!(out, ", (_meta)-[:{inner}]->({name})", inner=INNER_LABEL, name=name);
     }
     write!(out, ";");
     String::from_utf8(out.into_inner().unwrap()).unwrap()
@@ -106,10 +114,10 @@ async fn write_property_graph(g: &PropertyGraph, conn: &Graph) -> u64 {
 
 fn build_meta_edge_query(first_key : u64, second_key : u64, gt: &GraphTransformation) -> String {
     let start =
-"
-MATCH (n1: Meta {key:$first_key}), (n2: Meta {key:$second_key})
-CREATE (n1) -[:Meta]-> (n2);
-";
+format!("
+MATCH (n1: {meta} {{{key}:$first_key}}), (n2: {meta} {{{key}:$second_key}})
+CREATE (n1) -[:{meta}]-> (n2);
+",key=KEY_PROP, meta=META_LABEL);
     start.to_string()
 }
 
@@ -122,11 +130,85 @@ pub async fn write_graph_transformation(gt: &GraphTransformation, conn: &Graph) 
     conn.run(query).await.unwrap();
 }
 
+async fn get_source_graphs_async(label: &str, conn: &Graph) -> Vec<PropertyGraph> {
+    let mut graphs = Vec::new();
+    let query = query(&format!("match (s:{selected})
+return
+  collect {{ match (s)-[:{inner}]->(n) return n }} as n,
+  collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e;
+",selected=label,inner=INNER_LABEL));
+    let mut res = conn.execute(query).await.unwrap();
+    while let Ok(Some(row)) = res.next().await {
+        let mut g = PropertyGraph::default();
+        let mut ids = HashMap::new();
+        let nodes: Vec<Node> = row.get("n").unwrap();
+        for node in nodes {
+            let mut props = HashMap::new();
+            let mut name = None;
+            for key in node.keys() {
+                if key == NAME_PROP {
+                    name = Some(node.get(key).unwrap());
+                } else {
+                    props.insert(key.to_string(), node.get(key).unwrap());
+                }
+            }
+            let props = Properties {
+                name: name.unwrap(),
+                map: props,
+            };
+            let id = g.graph.add_node(props);
+            for label in node.labels() {
+                let lid = g.vertex_label.add_label(label.to_string());
+                g.vertex_label.add_label_mapping(&id, lid).unwrap();
+
+            }
+            ids.insert(node.id(), id);
+        }
+        let edges: Vec<Relation> = row.get("e").unwrap();
+        for edge in edges {
+            let mut props = HashMap::new();
+            let mut name = None;
+            for key in edge.keys() {
+                if key == NAME_PROP {
+                    name = Some(edge.get(key).unwrap());
+                } else {
+                    props.insert(key.to_string(), edge.get(key).unwrap());
+                }
+            }
+            let props = Properties {
+                name: name.unwrap(),
+                map: props,
+            };
+            let from_id = ids.get(&edge.start_node_id()).unwrap();
+            let to_id = ids.get(&edge.end_node_id()).unwrap();
+            let id = g.graph.add_edge(*from_id, *to_id, props);
+            let label = edge.typ();
+            if label != INTERNAL_LABEL {
+                let lid = g.edge_label.add_label(label.to_string());
+                g.edge_label.add_label_mapping(&id, lid).unwrap();
+            }
+        }
+        graphs.push(g);
+    }
+    graphs
+}
+
+pub fn get_source_graphs(label: &str) -> Vec<PropertyGraph> {
+    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+    let neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
+    runtime.block_on(get_source_graphs_async("Selected", &neograph))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::parsing::PropertyGraphParser;
 
     use super::*;
+
+    #[test]
+    fn get_graph_test() {
+        get_source_graphs("Selected");
+    }
 
     #[test]
     fn test_name() {
