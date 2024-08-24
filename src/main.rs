@@ -6,6 +6,7 @@ mod property_graph;
 mod transformation;
 mod utils;
 mod neo4j;
+mod similarity;
 
 use docopt::Docopt;
 use log::{debug, error, warn};
