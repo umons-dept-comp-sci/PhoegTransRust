@@ -8,9 +8,10 @@ use crate::utils::plural;
 use log::info;
 use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 use std::convert::From;
 use std::fs::OpenOptions;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{stdout, BufWriter, Write};
 use std::sync::mpsc::{Receiver, SendError, Sender, SyncSender};
 use std::sync::Arc;
@@ -76,16 +77,23 @@ where
     let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g));
     let r = apply_transformations(program, trsf, &g, target_graph);
     let mut bests = BinaryHeap::with_capacity(NUM_BEST+1);
+    let mut stored = HashSet::with_capacity(NUM_BEST+1);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
             if let Some(target_hash) = target_hash.as_ref() {
-                let g_hash = property_graph_minhash(&h.result);
-                let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
-                let key = generate_key(&h.result);
-                bests.push(SimGraph(sim,key,h));
-                if bests.len() > NUM_BEST {
-                    bests.pop();
+                let mut hash = DefaultHasher::new();
+                h.result.hash(&mut hash);
+                let key = hash.finish().to_string();
+                if !stored.contains(&key) {
+                    stored.insert(key.clone());
+                    let g_hash = property_graph_minhash(&h.result);
+                    let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                    bests.push(SimGraph(sim,key,h));
+                    if bests.len() > NUM_BEST {
+                        let removed = bests.pop().unwrap();
+                        stored.remove(&removed.1);
+                    }
                 }
             } else {
                 t.send(LogInfo::Transfo(h, "".to_string()))?;
