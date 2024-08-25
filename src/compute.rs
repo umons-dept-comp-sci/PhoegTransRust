@@ -1,11 +1,14 @@
 use crate::errors::*;
 use crate::graph_transformation::GraphTransformation;
 use crate::neo4j::write_graph_transformation;
-use crate::property_graph::PropertyGraph;
+use crate::property_graph::{generate_key, PropertyGraph};
+use crate::similarity::property_graph_minhash;
 use crate::transformation::*;
 use crate::utils::plural;
 use log::info;
+use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
+use std::collections::BinaryHeap;
 use std::convert::From;
 use std::fs::OpenOptions;
 use std::io::{stdout, BufWriter, Write};
@@ -14,6 +17,42 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use self::souffle::{create_program_instance, Program};
+
+const NUM_BEST: usize = 5;
+const EPS: f64 = 1e-12;
+struct SimGraph(f64, String, GraphTransformation);
+
+impl PartialEq for SimGraph {
+    fn eq(&self, other: &Self) -> bool {
+        (self.0 - other.0).abs() < EPS && self.1 == other.1
+    }
+}
+
+impl PartialOrd for SimGraph {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.0 - other.0 {
+            x if x < -EPS => {
+                Some(std::cmp::Ordering::Greater)
+            },
+            x if x > EPS => {
+                Some(std::cmp::Ordering::Less)
+            },
+            x => {
+                Some(self.1.cmp(&other.1))
+            }
+        }
+    }
+}
+
+impl Eq for SimGraph {
+
+}
+
+impl Ord for SimGraph {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
 
 pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
 where
@@ -34,12 +73,27 @@ pub fn handle_graph<F>(
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
+    let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g));
     let r = apply_transformations(program, trsf, &g, target_graph);
+    let mut bests = BinaryHeap::with_capacity(NUM_BEST+1);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
-            t.send(LogInfo::Transfo(h, "".to_string()))?;
+            if let Some(target_hash) = target_hash.as_ref() {
+                let g_hash = property_graph_minhash(&h.result);
+                let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                let key = generate_key(&h.result);
+                bests.push(SimGraph(sim,key,h));
+                if bests.len() > NUM_BEST {
+                    bests.pop();
+                }
+            } else {
+                t.send(LogInfo::Transfo(h, "".to_string()))?;
+            }
         }
+    }
+    for transfo in bests {
+        t.send(LogInfo::Transfo(transfo.2, "".to_string()))?;
     }
     Ok(())
 }
