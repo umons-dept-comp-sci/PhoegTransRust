@@ -1,7 +1,7 @@
 use crate::errors::*;
 use crate::graph_transformation::GraphTransformation;
 use crate::neo4j::write_graph_transformation;
-use crate::property_graph::{generate_key, PropertyGraph};
+use crate::property_graph::PropertyGraph;
 use crate::similarity::property_graph_minhash;
 use crate::transformation::*;
 use crate::utils::plural;
@@ -10,6 +10,7 @@ use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
 use std::collections::{BinaryHeap, HashSet};
 use std::convert::From;
+use std::fmt::{Debug, Display};
 use std::fs::OpenOptions;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{stdout, BufWriter, Write};
@@ -55,6 +56,18 @@ impl Ord for SimGraph {
     }
 }
 
+impl Debug for SimGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.2, f)
+    }
+}
+
+impl Display for SimGraph{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.2, f)
+    }
+}
+
 pub fn apply_filters<F>(g: &GraphTransformation, ftrs: Arc<F>) -> Result<String, ()>
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
@@ -81,10 +94,10 @@ where
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
+            let mut hash = DefaultHasher::new();
+            h.result.hash(&mut hash);
+            let key = hash.finish().to_string();
             if let Some(target_hash) = target_hash.as_ref() {
-                let mut hash = DefaultHasher::new();
-                h.result.hash(&mut hash);
-                let key = hash.finish().to_string();
                 if !stored.contains(&key) {
                     stored.insert(key.clone());
                     let g_hash = property_graph_minhash(&h.result);
@@ -101,7 +114,7 @@ where
         }
     }
     for transfo in bests {
-        t.send(LogInfo::Transfo(transfo.2, "".to_string()))?;
+        t.send(LogInfo::TransfoSim(transfo, "".to_string()))?;
     }
     Ok(())
 }
@@ -132,6 +145,7 @@ where
 #[derive(Debug)]
 pub enum LogInfo {
     Transfo(GraphTransformation, String),
+    TransfoSim(SimGraph, String),
     IncorrectTransfo {
         result: GraphTransformation,
         before: f64,
@@ -146,25 +160,38 @@ fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runti
 
 pub fn output_neo4j(
     receiver: Receiver<LogInfo>,
-) -> Result<(), TransProofError> {
+) -> Result<(Option<f64>, Option<String>), TransProofError> {
     //TODO remove the unwraps
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
-    let mut neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
+    let neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
+    let mut best_key = None;
+    let mut best_sim = None;
     let start = Instant::now();
     let mut i = 0;
     for log in receiver.iter() {
         match log {
-            LogInfo::Transfo(t, s) => {
+            LogInfo::Transfo(t, _) => {
                 i += 1;
                 runtime.block_on(write_graph_transformation(&t, &neograph));
                 // bufout.write_all(&format!("{}", t).into_bytes())?;
                 // bufout.write_all(&s.into_bytes())?;
                 // bufout.write_all(&['\n' as u8])?;
             }
+            LogInfo::TransfoSim(t, _) => {
+                i += 1;
+                runtime.block_on(write_graph_transformation(&t.2, &neograph));
+                if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
+                    best_sim = Some(t.0);
+                    best_key = Some(t.1);
+                }
+                // bufout.write_all(&format!("{}", t).into_bytes())?;
+                // bufout.write_all(&s.into_bytes())?;
+                // bufout.write_all(&['\n' as u8])?;
+            }
             LogInfo::IncorrectTransfo {
-                result: g,
-                before: v1,
-                after: v2,
+                result: _,
+                before: _,
+                after: _,
             } => {
                 i += 1;
                 // bufout.write_all(&format!("{}", g).into_bytes())?;
@@ -186,7 +213,7 @@ pub fn output_neo4j(
         millis,
         plural(millis)
     );
-    Ok(())
+    Ok((best_sim, best_key))
 }
 
 pub fn output(
@@ -194,7 +221,7 @@ pub fn output(
     filename: String,
     buffer: usize,
     append: bool,
-) -> Result<(), TransProofError> {
+) -> Result<(Option<f64>, Option<String>), TransProofError> {
     let mut bufout: Box<dyn Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
         _ => Box::new(BufWriter::with_capacity(
@@ -206,6 +233,8 @@ pub fn output(
                 .open(filename)?,
         )),
     };
+    let mut best_key = None;
+    let mut best_sim = None;
     let start = Instant::now();
     let mut i = 0;
     for log in receiver.iter() {
@@ -215,6 +244,16 @@ pub fn output(
                 bufout.write_all(&format!("{}", t).into_bytes())?;
                 bufout.write_all(&s.into_bytes())?;
                 bufout.write_all(&['\n' as u8])?;
+            }
+            LogInfo::TransfoSim(t, s) => {
+                i += 1;
+                bufout.write_all(&format!("{}", t).into_bytes())?;
+                bufout.write_all(&s.into_bytes())?;
+                bufout.write_all(&['\n' as u8])?;
+                if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
+                    best_sim = Some(t.0);
+                    best_key = Some(t.1);
+                }
             }
             LogInfo::IncorrectTransfo {
                 result: g,
@@ -241,7 +280,7 @@ pub fn output(
         millis,
         plural(millis)
     );
-    Ok(())
+    Ok((best_sim, best_key))
 }
 
 //#[derive(Clone)]

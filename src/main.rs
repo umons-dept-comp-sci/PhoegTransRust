@@ -9,7 +9,7 @@ mod neo4j;
 mod similarity;
 
 use docopt::Docopt;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use serde::Deserialize;
 use std::convert::TryInto;
 use std::fs::File;
@@ -26,6 +26,10 @@ use utils::*;
 use crate::graph_transformation::GraphTransformation;
 use crate::parsing::PropertyGraphParser;
 use crate::property_graph::PropertyGraph;
+
+const MAX_TURNS: usize = 3;
+const MIN_IMPROV: f64 = 0.1;
+const TARGET_SIM: f64 = 0.9;
 
 // (-f <filter>)...
 // -f <filter>            The filters \
@@ -183,39 +187,79 @@ fn main() -> Result<(), TransProofError> {
         .num_threads(num_threads)
         .build_global()?;
 
-    // Init comunications with sink thread
-    let result_sender;
-    let result_receiver;
-    if channel_size == 0 {
-        let result_chan = channel::<LogInfo>();
-        result_sender = SenderVariant::from(result_chan.0);
-        result_receiver = result_chan.1;
-    } else {
-        let result_chan = sync_channel::<LogInfo>(channel_size);
-        result_sender = SenderVariant::from(result_chan.0);
-        result_receiver = result_chan.1;
-    }
-    let builder = thread::Builder::new();
-    let whandle;
-    if neo4j {
-        whandle = builder.spawn(move || output_neo4j(result_receiver))?;
-    } else {
-        whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
-    }
+    let mut looping = true;
+    let mut turns = 0;
+    let mut previous_sim = None;
+    let mut previous_sig = None;
+    while looping && turns < MAX_TURNS {
+        // Init comunications with sink thread
+        let result_sender;
+        let result_receiver;
+        if channel_size == 0 {
+            let result_chan = channel::<LogInfo>();
+            result_sender = SenderVariant::from(result_chan.0);
+            result_receiver = result_chan.1;
+        } else {
+            let result_chan = sync_channel::<LogInfo>(channel_size);
+            result_sender = SenderVariant::from(result_chan.0);
+            result_receiver = result_chan.1;
+        }
+        let builder = thread::Builder::new();
+        let whandle;
+        if neo4j {
+            whandle = builder.spawn(move || output_neo4j(result_receiver))?;
+        } else {
+            let outfilename = outfilename.clone();
+            whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
+        }
 
-    let v;
-    if label.is_some() {
-        v = neo4j::get_source_graphs(&label.unwrap());
-    } else {
-        let parser = PropertyGraphParser;
-        let mut text = String::new();
-        buf.read_to_string(&mut text)?;
-        v = parser.convert_text(&text);
+        let v;
+        println!("{} {:?}", looping, previous_sim);
+        if label.is_some() || (looping && previous_sim.is_some()) {
+            v = neo4j::get_source_graphs(&label.clone().unwrap_or(neo4j::NEW_LABEL.to_string()));
+        } else {
+            let parser = PropertyGraphParser;
+            let mut text = String::new();
+            buf.read_to_string(&mut text)?;
+            v = parser.convert_text(&text);
+        }
+        if !v.is_empty() {
+            handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone(), target_graph.clone())?;
+        } else {
+            println!("empty set");
+            looping = false;
+        }
+        drop(result_sender);
+        let (best_sim, best_sig) = whandle.join().map_err(|x| TransProofError::Thread(x))??;
+        if let Some(best_sim_raw) = best_sim {
+            if let Some(best_sig_raw) = best_sig {
+                if let Some(previous_sim_raw) = previous_sim {
+                    if (best_sim_raw - previous_sim_raw) < MIN_IMPROV {
+                        turns += 1;
+                    } else {
+                        turns = 0;
+                    }
+                    if best_sim_raw > previous_sim_raw {
+                        previous_sim = Some(best_sim_raw);
+                        previous_sig = Some(best_sig_raw);
+                    }
+                } else {
+                    previous_sim = Some(best_sim_raw);
+                    previous_sig = Some(best_sig_raw);
+                }
+                looping = looping && previous_sim.map(|sim| sim < TARGET_SIM).unwrap_or(true);
+            } else {
+                println!("No best sig");
+                looping = false;
+            }
+        } else {
+            println!("No best sim");
+            looping = false;
+        }
     }
-    if !v.is_empty() {
-        handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone(), target_graph)?;
+    if let Some((best_sim, best_sig)) = previous_sim.zip(previous_sig) {
+        info!("Best similarity: {}", best_sim);
+        info!("Reached by: {}", best_sig);
     }
-    drop(result_sender);
-    whandle.join().map_err(|x| TransProofError::Thread(x))??;
     Ok(())
 }

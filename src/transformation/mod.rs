@@ -226,7 +226,9 @@ pub fn apply_single_transformation(program: Program, rel_name: &str, g: &Propert
         for operation in transfo {
             operation.apply(&mut ng, &mut node_map, &mut edge_map);
         }
-        res.push(ng);
+        if ng.result.check_unique_names() {
+            res.push(ng);
+        }
     }
     res
 }

@@ -8,8 +8,7 @@ use crate::{graph_transformation::GraphTransformation, property_graph::{Properti
 const INTERNAL_LABEL: &str = "Internal";
 const META_LABEL: &str = "Meta";
 const INNER_LABEL: &str = "Inner";
-const SELECTED_LABEL: &str = "Selected";
-const NEW_LABEL: &str = "New";
+pub const NEW_LABEL: &str = "New";
 const CREATED_PROP: &str = "created";
 const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";

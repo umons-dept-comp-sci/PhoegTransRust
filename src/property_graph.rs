@@ -303,6 +303,24 @@ impl PropertyGraph {
             data_match,
         )
     }
+
+    pub fn check_unique_names(&self) -> bool {
+        let mut names = HashSet::new();
+        for name in self.graph.node_weights().map(|x| &x.name) {
+            if names.contains(&name) {
+                return false;
+            }
+            names.insert(name);
+        }
+        names.clear();
+        for name in self.graph.edge_weights().map(|x| &x.name) {
+            if names.contains(&name) {
+                return false;
+            }
+            names.insert(name);
+        }
+        true
+    }
 }
 
 impl Default for PropertyGraph {
