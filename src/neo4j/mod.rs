@@ -9,19 +9,34 @@ const INTERNAL_LABEL: &str = "Internal";
 const META_LABEL: &str = "Meta";
 const INNER_LABEL: &str = "Inner";
 const SELECTED_LABEL: &str = "Selected";
+const NEW_LABEL: &str = "New";
 const CREATED_PROP: &str = "created";
 const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";
 
-async fn get_or_create_metanode(key: u64, conn: &mut Txn) -> bool {
+async fn get_or_create_metanode(key: u64, is_output: bool, conn: &mut Txn) -> bool {
+    let add_new = if is_output {
+        format!(", n:{new}", new=NEW_LABEL)
+    } else {
+        "".to_string()
+    };
+    let remove_new = if is_output {
+        "".to_string()
+    } else {
+        format!("remove n:{new}", new=NEW_LABEL)
+    };
     let query = query(
 &format!("
+call {{
 with timestamp() as time
 merge (n:{meta} {{{key}:$key}})
 on create
-set n.{created} = time
-return time = n.{created} as created
-",key=KEY_PROP, created=CREATED_PROP, meta=META_LABEL)).param("key", key as i64);
+set n.{created} = time {add_new}
+return n,n.{created} = time as created
+}}
+{remove_new}
+return created
+", add_new=add_new, remove_new=remove_new, key=KEY_PROP, created=CREATED_PROP, meta=META_LABEL)).param("key", key as i64);
     let mut data = conn.execute(query).await.unwrap();
     let row = data.next(conn.handle()).await.unwrap().unwrap();
     row.get("created").unwrap()
@@ -99,12 +114,12 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
     String::from_utf8(out.into_inner().unwrap()).unwrap()
 }
 
-async fn write_property_graph(g: &PropertyGraph, conn: &Graph) -> u64 {
+async fn write_property_graph(g: &PropertyGraph, is_output: bool, conn: &Graph) -> u64 {
     let mut hash = DefaultHasher::new();
     g.hash(&mut hash);
     let key = hash.finish();
     let mut tx = conn.start_txn().await.unwrap();
-    if get_or_create_metanode(key, &mut tx).await {
+    if get_or_create_metanode(key, is_output, &mut tx).await {
         let query = query(&create_property_graph_query(g)).param("key", key as i64);
         tx.run(query).await.unwrap();
     }
@@ -123,9 +138,9 @@ CREATE (n1) -[:{meta}]-> (n2);
 
 pub async fn write_graph_transformation(gt: &GraphTransformation, conn: &Graph) {
     let first = &gt.init;
-    let first_key = write_property_graph(first, conn).await;
+    let first_key = write_property_graph(first, false, conn).await;
     let second = &gt.result;
-    let second_key = write_property_graph(second, conn).await;
+    let second_key = write_property_graph(second, true, conn).await;
     let query = query(&build_meta_edge_query(first_key, second_key, gt)).param("first_key", first_key as i64).param("second_key", second_key as i64);
     conn.run(query).await.unwrap();
 }
@@ -196,7 +211,7 @@ return
 pub fn get_source_graphs(label: &str) -> Vec<PropertyGraph> {
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
     let neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
-    runtime.block_on(get_source_graphs_async("Selected", &neograph))
+    runtime.block_on(get_source_graphs_async(label, &neograph))
 }
 
 #[cfg(test)]
