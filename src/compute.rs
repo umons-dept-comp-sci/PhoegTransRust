@@ -22,7 +22,7 @@ use self::souffle::{create_program_instance, Program};
 
 const NUM_BEST: usize = 5;
 const EPS: f64 = 1e-12;
-struct SimGraph(f64, u64, GraphTransformation);
+pub struct SimGraph(f64, u64, GraphTransformation);
 
 impl PartialEq for SimGraph {
     fn eq(&self, other: &Self) -> bool {
@@ -32,17 +32,7 @@ impl PartialEq for SimGraph {
 
 impl PartialOrd for SimGraph {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.0 - other.0 {
-            x if x < -EPS => {
-                Some(std::cmp::Ordering::Greater)
-            },
-            x if x > EPS => {
-                Some(std::cmp::Ordering::Less)
-            },
-            _ => {
-                Some(self.1.cmp(&other.1))
-            }
-        }
+        Some(Ord::cmp(self, other))
     }
 }
 
@@ -52,7 +42,17 @@ impl Eq for SimGraph {
 
 impl Ord for SimGraph {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match self.0 - other.0 {
+            x if x < -EPS => {
+                std::cmp::Ordering::Greater
+            },
+            x if x > EPS => {
+                std::cmp::Ordering::Less
+            },
+            _ => {
+                self.1.cmp(&other.1)
+            }
+        }
     }
 }
 
