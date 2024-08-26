@@ -22,7 +22,7 @@ use self::souffle::{create_program_instance, Program};
 
 const NUM_BEST: usize = 5;
 const EPS: f64 = 1e-12;
-struct SimGraph(f64, String, GraphTransformation);
+struct SimGraph(f64, u64, GraphTransformation);
 
 impl PartialEq for SimGraph {
     fn eq(&self, other: &Self) -> bool {
@@ -39,7 +39,7 @@ impl PartialOrd for SimGraph {
             x if x > EPS => {
                 Some(std::cmp::Ordering::Less)
             },
-            x => {
+            _ => {
                 Some(self.1.cmp(&other.1))
             }
         }
@@ -96,7 +96,7 @@ where
         if let Ok(_res) = s {
             let mut hash = DefaultHasher::new();
             h.result.hash(&mut hash);
-            let key = hash.finish().to_string();
+            let key = hash.finish();
             if let Some(target_hash) = target_hash.as_ref() {
                 if !stored.contains(&key) {
                     stored.insert(key.clone());
@@ -160,7 +160,7 @@ fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runti
 
 pub fn output_neo4j(
     receiver: Receiver<LogInfo>,
-) -> Result<(Option<f64>, Option<String>), TransProofError> {
+) -> Result<(Option<f64>, Option<u64>), TransProofError> {
     //TODO remove the unwraps
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
     let neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
@@ -221,7 +221,7 @@ pub fn output(
     filename: String,
     buffer: usize,
     append: bool,
-) -> Result<(Option<f64>, Option<String>), TransProofError> {
+) -> Result<(Option<f64>, Option<u64>), TransProofError> {
     let mut bufout: Box<dyn Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
         _ => Box::new(BufWriter::with_capacity(

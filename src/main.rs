@@ -259,7 +259,7 @@ fn main() -> Result<(), TransProofError> {
     }
     if let Some((best_sim, best_sig)) = previous_sim.zip(previous_sig) {
         info!("Best similarity: {}", best_sim);
-        info!("Reached by: {}", best_sig);
+        info!("Reached by: {}", best_sig as i64);
     }
     Ok(())
 }
