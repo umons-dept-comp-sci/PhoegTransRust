@@ -9,6 +9,7 @@ use petgraph::stable_graph::{NodeIndex, EdgeIndex};
 use petgraph::visit::NodeIndexable;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::format;
 use std::net::ToSocketAddrs;
 
 use self::souffle::Program;
@@ -65,28 +66,44 @@ impl Operation {
     fn apply(&self, g: &mut GraphTransformation, node_map: &mut HashMap<u32, NodeIndex<u32>>, edge_map: &mut HashMap<u32, EdgeIndex<u32>>) {
         match self {
             Self::AddVertexLabel(v, l) => {
+                let index = get_node_index(v, node_map);
                 g.result
                     .vertex_label
-                    .add_label_mapping(&get_node_index(v, node_map), *l)
+                    .add_label_mapping(&index, *l)
                     .unwrap();
+                let name = g.result.graph.node_weight(index).unwrap().name.clone();
+                let label = g.result.vertex_label.get_label(*l).unwrap().clone();
+                g.operations.push(format!("AddVertexLabel({},{})", name, label));
             },
             Self::RemoveVertexLabel(v, l) => {
+                let index = get_node_index(v, node_map);
                 g.result
                     .vertex_label
-                    .remove_label_mapping(&get_node_index(v, node_map), *l)
+                    .remove_label_mapping(&index, *l)
                     .unwrap();
+                let name = g.result.graph.node_weight(index).unwrap().name.clone();
+                let label = g.result.vertex_label.get_label(*l).unwrap().clone();
+                g.operations.push(format!("RemoveVertexLabel({},{})", name, label));
             },
             Self::AddEdgeLabel(e, l) => {
+                let index = get_edge_index(e, edge_map);
                 g.result
                     .edge_label
-                    .add_label_mapping(&get_edge_index(e, edge_map), *l)
+                    .add_label_mapping(&index, *l)
                     .unwrap();
+                let name = g.result.graph.edge_weight(index).unwrap().name.clone();
+                let label = g.result.edge_label.get_label(*l).unwrap().clone();
+                g.operations.push(format!("AddEdgeLabel({},{})", name, label));
             },
             Self::RemoveEdgeLabel(e, l) => {
+                let index = get_edge_index(e, edge_map);
                 g.result
                     .edge_label
-                    .remove_label_mapping(&get_edge_index(e, edge_map), *l)
+                    .remove_label_mapping(&index, *l)
                     .unwrap();
+                let name = g.result.graph.edge_weight(index).unwrap().name.clone();
+                let label = g.result.edge_label.get_label(*l).unwrap().clone();
+                g.operations.push(format!("RemoveEdgeLabel({},{})", name, label));
             },
             Self::AddVertex(v) => {
                 let index = get_node_index(v, node_map);
@@ -104,9 +121,11 @@ impl Operation {
             },
             Self::RemoveVertex(v) => {
                 let index = get_node_index(v, node_map);
+                let name = g.result.graph.node_weight(index).unwrap().name.clone();
                 g.result.vertex_label.remove_element(&index);
                 g.result.graph.remove_node(index);
                 node_map.remove(v);
+                g.operations.push(format!("RemoveVertex({})", name));
             },
             Self::AddEdge(e, start, end) => {
                 let index = get_edge_index(e, edge_map);
@@ -117,58 +136,79 @@ impl Operation {
                     //TODO Need a name when creating an edge.
                     let n1 = get_node_index(start, node_map);
                     let n2 = get_node_index(end, node_map);
+                    let name1 = g.result.graph.node_weight(n1).unwrap().name.clone();
+                    let name2 = g.result.graph.node_weight(n2).unwrap().name.clone();
                     let real_index = g.result.graph.add_edge(n1, n2, Properties {
                         name : "".to_string(),
                         map : HashMap::new()
                     });
                     edge_map.insert(*e, real_index);
+                    g.operations.push(format!("AddEdge({},{})", name1, name2));
                 }
             },
             Self::RemoveEdge(e) => {
                 let index = get_edge_index(e, edge_map);
+                let name = g.result.graph.edge_weight(index).unwrap().name.clone();
                 g.result.edge_label.remove_element(&index);
                 g.result.graph.remove_edge(index);
                 edge_map.remove(e);
+                g.operations.push(format!("RemoveEdge({})", name));
             },
             Self::AddVertexProperty(v, name, value) => {
-                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}")).map.insert(name.to_string(), value.to_string());
+                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}"));
+                prop.map.insert(name.to_string(), value.to_string());
+                g.operations.push(format!("AddVertexProperty({},{},{})", prop.name, name, value));
             },
             Self::RemoveVertexProperty(v, name) => {
-                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}")).map.remove(name);
+                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}"));
+                prop.map.remove(name);
+                g.operations.push(format!("RemoveVertexProperty({},{})", prop.name, name));
             },
             Self::AddEdgeProperty(e, name, value) => {
-                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).map.insert(name.to_string(), value.to_string());
+                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
+                prop.map.insert(name.to_string(), value.to_string());
+                g.operations.push(format!("AddEdgeProperty({},{},{})", prop.name, name, value));
             },
             Self::RemoveEdgeProperty(e, name) => {
-                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).map.remove(name);
+                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
+                prop.map.remove(name);
+                g.operations.push(format!("RemoveEdgeProperty({},{})", prop.name, name));
             },
             Self::RenameVertex(v, name) => {
-                g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown node {v}")).name = name.to_string();
+                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown node {v}"));
+                g.operations.push(format!("RenameVertex({},{})", prop.name, name));
+                prop.name = name.to_string();
             },
             Self::RenameEdge(e, name) => {
-                g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}")).name = name.to_string();
+                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
+                g.operations.push(format!("RenameEdge({},{})", prop.name, name));
+                prop.name = name.to_string();
             },
             Self::MoveEdgeTarget(e,t) => {
                 let edgeindex = get_edge_index(e, edge_map);
                 let src = g.result.graph.edge_endpoints(edgeindex).unwrap().0;
                 let target = get_node_index(t, node_map);
                 let w = g.result.graph.remove_edge(edgeindex).unwrap();
+                let edgename = w.name.clone();
                 let real_index = g.result.graph.add_edge(src, target, w);
                 let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
                 labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
+                g.operations.push(format!("MoveEdgeTarget({},{}", edgename.clone(), g.result.graph.node_weight(target).unwrap().name.clone()));
             },
             Self::MoveEdgeSource(e,s) => {
                 let edgeindex = get_edge_index(e, edge_map);
                 let target = g.result.graph.edge_endpoints(edgeindex).unwrap().1;
                 let src = get_node_index(s, node_map);
                 let w = g.result.graph.remove_edge(edgeindex).unwrap();
+                let edgename = w.name.clone();
                 let real_index = g.result.graph.add_edge(src, target, w);
                 let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
                 labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
+                g.operations.push(format!("MoveEdgeSource({},{}", edgename.clone(), g.result.graph.node_weight(src).unwrap().name.clone()));
             },
         }
     }

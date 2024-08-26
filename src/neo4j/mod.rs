@@ -12,6 +12,7 @@ pub const NEW_LABEL: &str = "New";
 const CREATED_PROP: &str = "created";
 const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";
+const OPERATIONS_PROP: &str = "operations";
 
 async fn get_or_create_metanode(key: u64, is_output: bool, conn: &mut Txn) -> bool {
     let add_new = if is_output {
@@ -126,12 +127,12 @@ async fn write_property_graph(g: &PropertyGraph, is_output: bool, conn: &Graph) 
     key
 }
 
-fn build_meta_edge_query(first_key : u64, second_key : u64, gt: &GraphTransformation) -> String {
+fn build_meta_edge_query() -> String {
     let start =
 format!("
 MATCH (n1: {meta} {{{key}:$first_key}}), (n2: {meta} {{{key}:$second_key}})
-CREATE (n1) -[:{meta}]-> (n2);
-",key=KEY_PROP, meta=META_LABEL);
+CREATE (n1) -[:{meta} {{{ops}:$operations}}]-> (n2);
+",key=KEY_PROP, meta=META_LABEL, ops=OPERATIONS_PROP);
     start.to_string()
 }
 
@@ -140,7 +141,7 @@ pub async fn write_graph_transformation(gt: &GraphTransformation, conn: &Graph) 
     let first_key = write_property_graph(first, false, conn).await;
     let second = &gt.result;
     let second_key = write_property_graph(second, true, conn).await;
-    let query = query(&build_meta_edge_query(first_key, second_key, gt)).param("first_key", first_key as i64).param("second_key", second_key as i64);
+    let query = query(&build_meta_edge_query()).param("first_key", first_key as i64).param("second_key", second_key as i64).param("operations", gt.operations.clone());
     conn.run(query).await.unwrap();
 }
 
