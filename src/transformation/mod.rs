@@ -195,7 +195,7 @@ impl Operation {
                 labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
-                g.operations.push(format!("MoveEdgeTarget({},{}", edgename.clone(), g.result.graph.node_weight(target).unwrap().name.clone()));
+                g.operations.push(format!("MoveEdgeTarget({},{})", edgename.clone(), g.result.graph.node_weight(target).unwrap().name.clone()));
             },
             Self::MoveEdgeSource(e,s) => {
                 let edgeindex = get_edge_index(e, edge_map);
@@ -208,7 +208,7 @@ impl Operation {
                 labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
-                g.operations.push(format!("MoveEdgeSource({},{}", edgename.clone(), g.result.graph.node_weight(src).unwrap().name.clone()));
+                g.operations.push(format!("MoveEdgeSource({},{})", edgename.clone(), g.result.graph.node_weight(src).unwrap().name.clone()));
             },
         }
     }

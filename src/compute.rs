@@ -159,7 +159,7 @@ fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runti
 }
 
 pub fn output_neo4j(
-    receiver: Receiver<LogInfo>,
+    receiver: Receiver<LogInfo>, first_run: bool
 ) -> Result<(Option<f64>, Option<u64>), TransProofError> {
     //TODO remove the unwraps
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
@@ -172,14 +172,14 @@ pub fn output_neo4j(
         match log {
             LogInfo::Transfo(t, _) => {
                 i += 1;
-                runtime.block_on(write_graph_transformation(&t, &neograph));
+                runtime.block_on(write_graph_transformation(&t, first_run, &neograph));
                 // bufout.write_all(&format!("{}", t).into_bytes())?;
                 // bufout.write_all(&s.into_bytes())?;
                 // bufout.write_all(&['\n' as u8])?;
             }
             LogInfo::TransfoSim(t, _) => {
                 i += 1;
-                runtime.block_on(write_graph_transformation(&t.2, &neograph));
+                runtime.block_on(write_graph_transformation(&t.2, first_run, &neograph));
                 if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
                     best_sim = Some(t.0);
                     best_key = Some(t.1);

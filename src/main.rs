@@ -10,6 +10,7 @@ mod similarity;
 
 use docopt::Docopt;
 use log::{debug, error, info, warn};
+use neo4j::add_label;
 use serde::Deserialize;
 use std::convert::TryInto;
 use std::fs::File;
@@ -191,6 +192,7 @@ fn main() -> Result<(), TransProofError> {
     let mut turns = 0;
     let mut previous_sim = None;
     let mut previous_sig = None;
+    let mut first_run = true;
     while looping && turns < MAX_TURNS {
         // Init comunications with sink thread
         let result_sender;
@@ -207,7 +209,7 @@ fn main() -> Result<(), TransProofError> {
         let builder = thread::Builder::new();
         let whandle;
         if neo4j {
-            whandle = builder.spawn(move || output_neo4j(result_receiver))?;
+            whandle = builder.spawn(move || output_neo4j(result_receiver, first_run))?;
         } else {
             let outfilename = outfilename.clone();
             whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
@@ -256,10 +258,13 @@ fn main() -> Result<(), TransProofError> {
             println!("No best sim");
             looping = false;
         }
+        first_run = false;
     }
     if let Some((best_sim, best_sig)) = previous_sim.zip(previous_sig) {
+        add_label(neo4j::TARGET_LABEL, best_sig);
         info!("Best similarity: {}", best_sim);
         info!("Reached by: {}", best_sig as i64);
     }
+    neo4j::compute_paths(neo4j::SOURCE_LABEL, neo4j::TARGET_LABEL, neo4j::OPERATIONS_PROP);
     Ok(())
 }
