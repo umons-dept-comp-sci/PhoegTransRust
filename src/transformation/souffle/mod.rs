@@ -272,6 +272,16 @@ impl OperationName {
     fn construct(&self, t : OutputTuple) -> Operation {
         unsafe {
         match self {
+                Self::CreateVertexLabel => {
+                    let label = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::CreateVertexLabel(label, name)
+                },
+                Self::CreateEdgeLabel => {
+                    let label = extract_number(t);
+                    let name = extract_text(t);
+                    Operation::CreateEdgeLabel(label, name)
+                },
                 Self::AddVertexLabel => {
                     let vertex = extract_number(t);
                     let label = extract_number(t);

@@ -1,5 +1,5 @@
 use crate::errors::TransProofError;
-use crate::property_graph::{PropertyGraph, Properties};
+use crate::property_graph::{LabelMap, Properties, PropertyGraph};
 use crate::souffle::extract_text;
 use crate::transformation::souffle::extract_number;
 use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
@@ -16,11 +16,13 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-static OPERATIONS : [OperationName; 16] = [
+static OPERATIONS : [OperationName; 18] = [
     OperationName::AddVertex,
+    OperationName::CreateVertexLabel,
     OperationName::AddVertexLabel,
     OperationName::AddVertexProperty,
     OperationName::AddEdge,
+    OperationName::CreateEdgeLabel,
     OperationName::AddEdgeLabel,
     OperationName::AddEdgeProperty,
     OperationName::MoveEdgeTarget,
@@ -37,7 +39,9 @@ static OPERATIONS : [OperationName; 16] = [
 
 pub enum Operation {
     AddVertexLabel(u32, u32),
+    CreateVertexLabel(u32, String),
     RemoveVertexLabel(u32,u32),
+    CreateEdgeLabel(u32, String),
     AddEdgeLabel(u32, u32),
     RemoveEdgeLabel(u32,u32),
     AddVertex(u32),
@@ -62,47 +66,71 @@ fn get_edge_index(id : &u32, edge_map: &HashMap<u32, EdgeIndex<u32>>) -> EdgeInd
     *edge_map.get(&id).unwrap_or(&(*id).into())
 }
 
+fn get_node_label_index(id: &u32, node_label_map: &HashMap<u32, u32>) -> u32 {
+    *node_label_map.get(id).unwrap_or(id)
+}
+
+fn get_edge_label_index(id: &u32, edge_label_map: &HashMap<u32, u32>) -> u32 {
+    *edge_label_map.get(id).unwrap_or(id)
+}
+
 impl Operation {
-    fn apply(&self, g: &mut GraphTransformation, node_map: &mut HashMap<u32, NodeIndex<u32>>, edge_map: &mut HashMap<u32, EdgeIndex<u32>>) {
+    fn apply(&self, g: &mut GraphTransformation, node_map: &mut HashMap<u32, NodeIndex<u32>>, edge_map: &mut HashMap<u32, EdgeIndex<u32>>, node_label_map: &mut HashMap<u32, u32>, edge_label_map: &mut HashMap<u32, u32>) {
         match self {
             Self::AddVertexLabel(v, l) => {
                 let index = get_node_index(v, node_map);
+                let lid = get_node_label_index(l, node_label_map);
                 g.result
                     .vertex_label
-                    .add_label_mapping(&index, *l)
+                    .add_label_mapping(&index, lid)
                     .unwrap();
                 let name = g.result.graph.node_weight(index).unwrap().name.clone();
-                let label = g.result.vertex_label.get_label(*l).unwrap().clone();
+                let label = g.result.vertex_label.get_label(lid).unwrap().clone();
                 g.operations.push(format!("AddVertexLabel({},{})", name, label));
             },
+            Self::CreateVertexLabel(l, name) => {
+                //FIXME what if the name already exists ? Or the id ?
+                let index = g.result.vertex_label.add_label(name.clone());
+                node_label_map.insert(*l, index);
+                g.operations.push(format!("CreateVertexLabel({})", name));
+            }
             Self::RemoveVertexLabel(v, l) => {
                 let index = get_node_index(v, node_map);
+                let lid = get_node_label_index(l, node_label_map);
                 g.result
                     .vertex_label
-                    .remove_label_mapping(&index, *l)
+                    .remove_label_mapping(&index, lid)
                     .unwrap();
                 let name = g.result.graph.node_weight(index).unwrap().name.clone();
-                let label = g.result.vertex_label.get_label(*l).unwrap().clone();
+                let label = g.result.vertex_label.get_label(lid).unwrap().clone();
                 g.operations.push(format!("RemoveVertexLabel({},{})", name, label));
             },
             Self::AddEdgeLabel(e, l) => {
                 let index = get_edge_index(e, edge_map);
+                let lid = get_edge_label_index(l, edge_label_map);
                 g.result
                     .edge_label
-                    .add_label_mapping(&index, *l)
+                    .add_label_mapping(&index, lid)
                     .unwrap();
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
-                let label = g.result.edge_label.get_label(*l).unwrap().clone();
+                let label = g.result.edge_label.get_label(lid).unwrap().clone();
                 g.operations.push(format!("AddEdgeLabel({},{})", name, label));
             },
+            Self::CreateEdgeLabel(l, name) => {
+                //FIXME what if the name already exists ? Or the id ?
+                let index = g.result.edge_label.add_label(name.clone());
+                edge_label_map.insert(*l, index);
+                g.operations.push(format!("CreateEdgeLabel({})", name));
+            }
             Self::RemoveEdgeLabel(e, l) => {
                 let index = get_edge_index(e, edge_map);
+                let lid = get_edge_label_index(l, edge_label_map);
                 g.result
                     .edge_label
-                    .remove_label_mapping(&index, *l)
+                    .remove_label_mapping(&index, lid)
                     .unwrap();
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
-                let label = g.result.edge_label.get_label(*l).unwrap().clone();
+                let label = g.result.edge_label.get_label(lid).unwrap().clone();
                 g.operations.push(format!("RemoveEdgeLabel({},{})", name, label));
             },
             Self::AddVertex(v) => {
@@ -215,6 +243,8 @@ impl Operation {
 }
 
 enum OperationName {
+    CreateVertexLabel,
+    CreateEdgeLabel,
     AddVertexLabel,
     RemoveVertexLabel,
     AddEdgeLabel,
@@ -236,6 +266,8 @@ enum OperationName {
 impl OperationName {
     fn get_relation(&self) -> &str {
         match self {
+            Self::CreateVertexLabel => "CreateVertexLabel_",
+            Self::CreateEdgeLabel => "CreateEdgeLabel_",
             Self::AddVertexLabel => "AddVertexLabel_",
             Self::RemoveVertexLabel => "RemoveVertexLabel_",
             Self::AddEdgeLabel => "AddEdgeLabel_",
@@ -263,8 +295,10 @@ pub fn apply_single_transformation(program: Program, rel_name: &str, g: &Propert
         let mut ng : GraphTransformation = g.into();
         let mut node_map = HashMap::new();
         let mut edge_map = HashMap::new();
+        let mut node_label_map = HashMap::new();
+        let mut edge_label_map = HashMap::new();
         for operation in transfo {
-            operation.apply(&mut ng, &mut node_map, &mut edge_map);
+            operation.apply(&mut ng, &mut node_map, &mut edge_map, &mut node_label_map, &mut edge_label_map);
         }
         if ng.result.check_unique_names() {
             res.push(ng);

@@ -74,6 +74,28 @@
 .decl TargetEdgeHasLabel(elem:unsigned, label:unsigned)
 .input TargetEdgeHasLabel
 
+// Utilities
+
+.decl FirstFreeVertexId(id: unsigned)
+
+FirstFreeVertexId(mid+1):-
+  mid = max id : Vertex(id).
+
+.decl FirstFreeEdgeId(id: unsigned)
+
+FirstFreeEdgeId(mid+1):-
+  mid = max id : Edge(id, _, _).
+
+.decl FirstFreeVertexLabelId(id: unsigned)
+
+FirstFreeVertexLabelId(mid+1):-
+  mid = max id : VertexLabel(id).
+
+.decl FirstFreeEdgeLabelId(id: unsigned)
+
+FirstFreeEdgeLabelId(mid+1):-
+  mid = max id : EdgeLabel(id).
+
 // Transformations
 
 .decl Transformation(name:symbol)
@@ -83,6 +105,10 @@
 .input RemoveVertexLabel_
 .output RemoveVertexLabel_
 
+.decl CreateVertexLabel_(transfo:symbol, id: number, label:unsigned, labelname: symbol)
+.input CreateVertexLabel_
+.output CreateVertexLabel_
+
 .decl AddVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
 .input AddVertexLabel_
 .output AddVertexLabel_
@@ -90,6 +116,10 @@
 .decl RemoveEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
 .input RemoveEdgeLabel_
 .output RemoveEdgeLabel_
+
+.decl CreateEdgeLabel_(transfo:symbol, id:number, label:unsigned, labelname: symbol)
+.input CreateEdgeLabel_
+.output CreateEdgeLabel_
 
 .decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
 .input AddEdgeLabel_
