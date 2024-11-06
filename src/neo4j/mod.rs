@@ -29,6 +29,7 @@ async fn get_or_create_metanode(
     key: u64,
     is_output: bool,
     is_source: bool,
+    sim: Option<f64>,
     conn: &mut Txn,
 ) -> bool {
     let add_new = if is_output {
@@ -46,13 +47,14 @@ async fn get_or_create_metanode(
     } else {
         format!("remove n:{new}", new = NEW_LABEL)
     };
+    let set_sim = sim.map(|s| format!(", n.similarity={}",s)).unwrap_or("".to_string());
     let query = query(&format!(
         "
 call {{
 with timestamp() as time
 merge (n:{meta} {{{key}:$key}})
 on create
-set n.{created} = time {add_new} {add_source}
+set n.{created} = time {set_sim} {add_new} {add_source}
 return n,n.{created} = time as created
 }}
 {remove_new}
@@ -60,6 +62,7 @@ return created
 ",
         add_new = add_new,
         add_source = add_source,
+        set_sim = set_sim,
         remove_new = remove_new,
         key = KEY_PROP,
         created = CREATED_PROP,
@@ -157,13 +160,14 @@ async fn write_property_graph(
     g: &PropertyGraph,
     is_output: bool,
     is_source: bool,
+    sim: Option<f64>,
     conn: &Graph,
 ) -> u64 {
     let mut hash = DefaultHasher::new();
     g.hash(&mut hash);
     let key = hash.finish();
     let mut tx = conn.start_txn().await.unwrap();
-    if get_or_create_metanode(key, is_output, is_source, &mut tx).await {
+    if get_or_create_metanode(key, is_output, is_source, sim, &mut tx).await {
         let query = query(&create_property_graph_query(g)).param("key", key as i64);
         tx.run(query).await.unwrap();
     }
@@ -184,11 +188,11 @@ CREATE (n1) -[:{meta} {{{ops}:$operations}}]-> (n2);
     start.to_string()
 }
 
-pub async fn write_graph_transformation(gt: &GraphTransformation, is_source: bool, conn: &Graph) {
+pub async fn write_graph_transformation(gt: &GraphTransformation, is_source: bool, sim: Option<f64>, conn: &Graph) {
     let first = &gt.init;
-    let first_key = write_property_graph(first, false, is_source, conn).await;
+    let first_key = write_property_graph(first, false, is_source, None, conn).await;
     let second = &gt.result;
-    let second_key = write_property_graph(second, true, false, conn).await;
+    let second_key = write_property_graph(second, true, false, sim, conn).await;
     let query = query(&build_meta_edge_query())
         .param("first_key", first_key as i64)
         .param("second_key", second_key as i64)
