@@ -7,5 +7,5 @@ data/
 matching-parameterized-subgraphs
 rename.sh
 datalog_compiled
-src/transformation/souffle/programs.rs
 .vscode
+src/transformation/souffle/souffle_ffi.rs
