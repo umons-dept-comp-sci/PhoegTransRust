@@ -3,7 +3,7 @@ pub use souffle_ffi::*;
 #[cxx::bridge(namespace = "souffle")]
 pub mod souffle_ffi {
     unsafe extern "C++" {
-        include!("/usr/local/include/souffle/SouffleInterface.h");
+        include!("SouffleInterface.h");
 
         type SouffleProgram;
         type ProgramFactory;
