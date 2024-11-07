@@ -1,17 +1,8 @@
-pub mod compute;
-mod errors;
-mod graph_transformation;
-mod parsing;
-mod property_graph;
-mod transformation;
-mod utils;
-mod neo4j;
-mod similarity;
-
 use docopt::Docopt;
 use log::{debug, error, info, warn};
 use neo4j::add_label;
 use serde::Deserialize;
+use transproof::{compute, errors, neo4j, transformation, utils};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader, Read};
@@ -24,9 +15,7 @@ use errors::*;
 use transformation::*;
 use utils::*;
 
-use crate::graph_transformation::GraphTransformation;
-use crate::parsing::PropertyGraphParser;
-use crate::property_graph::PropertyGraph;
+use transproof::{graph_transformation::GraphTransformation, parsing::PropertyGraphParser, property_graph::PropertyGraph};
 
 const MAX_TURNS: usize = 3;
 const MIN_IMPROV: f64 = 0.1;

@@ -1,13 +1,14 @@
+use self::souffle::extract_text;
 use crate::errors::TransProofError;
 use crate::property_graph::{LabelMap, Properties, PropertyGraph};
-use crate::souffle::extract_text;
 use crate::transformation::souffle::extract_number;
 use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
 use lazy_static::lazy_static;
 use log::error;
-use petgraph::stable_graph::{NodeIndex, EdgeIndex};
+use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
-use std::collections::HashMap;
+use souffle::generate_operation_trees;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::format;
 use std::net::ToSocketAddrs;
@@ -16,7 +17,7 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-static OPERATIONS : [OperationName; 18] = [
+static OPERATIONS: [OperationName; 18] = [
     OperationName::AddVertex,
     OperationName::CreateVertexLabel,
     OperationName::AddVertexLabel,
@@ -40,29 +41,29 @@ static OPERATIONS : [OperationName; 18] = [
 pub enum Operation {
     AddVertexLabel(u32, u32),
     CreateVertexLabel(u32, String),
-    RemoveVertexLabel(u32,u32),
+    RemoveVertexLabel(u32, u32),
     CreateEdgeLabel(u32, String),
     AddEdgeLabel(u32, u32),
-    RemoveEdgeLabel(u32,u32),
+    RemoveEdgeLabel(u32, u32),
     AddVertex(u32),
     RemoveVertex(u32),
-    AddEdge(u32,u32,u32),
+    AddEdge(u32, u32, u32),
     RemoveEdge(u32),
     AddVertexProperty(u32, String, String),
-    RemoveVertexProperty(u32,String),
+    RemoveVertexProperty(u32, String),
     AddEdgeProperty(u32, String, String),
-    RemoveEdgeProperty(u32,String),
-    RenameVertex(u32,String),
-    RenameEdge(u32,String),
-    MoveEdgeTarget(u32,u32),
-    MoveEdgeSource(u32,u32),
+    RemoveEdgeProperty(u32, String),
+    RenameVertex(u32, String),
+    RenameEdge(u32, String),
+    MoveEdgeTarget(u32, u32),
+    MoveEdgeSource(u32, u32),
 }
 
-fn get_node_index(id : &u32, node_map: &HashMap<u32, NodeIndex<u32>>) -> NodeIndex<u32> {
+fn get_node_index(id: &u32, node_map: &HashMap<u32, NodeIndex<u32>>) -> NodeIndex<u32> {
     *node_map.get(&id).unwrap_or(&(*id).into())
 }
 
-fn get_edge_index(id : &u32, edge_map: &HashMap<u32, EdgeIndex<u32>>) -> EdgeIndex<u32> {
+fn get_edge_index(id: &u32, edge_map: &HashMap<u32, EdgeIndex<u32>>) -> EdgeIndex<u32> {
     *edge_map.get(&id).unwrap_or(&(*id).into())
 }
 
@@ -75,7 +76,14 @@ fn get_edge_label_index(id: &u32, edge_label_map: &HashMap<u32, u32>) -> u32 {
 }
 
 impl Operation {
-    fn apply(&self, g: &mut GraphTransformation, node_map: &mut HashMap<u32, NodeIndex<u32>>, edge_map: &mut HashMap<u32, EdgeIndex<u32>>, node_label_map: &mut HashMap<u32, u32>, edge_label_map: &mut HashMap<u32, u32>) {
+    fn apply(
+        &self,
+        g: &mut GraphTransformation,
+        node_map: &mut HashMap<u32, NodeIndex<u32>>,
+        edge_map: &mut HashMap<u32, EdgeIndex<u32>>,
+        node_label_map: &mut HashMap<u32, u32>,
+        edge_label_map: &mut HashMap<u32, u32>,
+    ) {
         match self {
             Self::AddVertexLabel(v, l) => {
                 let index = get_node_index(v, node_map);
@@ -86,8 +94,9 @@ impl Operation {
                     .unwrap();
                 let name = g.result.graph.node_weight(index).unwrap().name.clone();
                 let label = g.result.vertex_label.get_label(lid).unwrap().clone();
-                g.operations.push(format!("AddVertexLabel({},{})", name, label));
-            },
+                g.operations
+                    .push(format!("AddVertexLabel({},{})", name, label));
+            }
             Self::CreateVertexLabel(l, name) => {
                 //FIXME what if the name already exists ? Or the id ?
                 let index = g.result.vertex_label.add_label(name.clone());
@@ -103,19 +112,18 @@ impl Operation {
                     .unwrap();
                 let name = g.result.graph.node_weight(index).unwrap().name.clone();
                 let label = g.result.vertex_label.get_label(lid).unwrap().clone();
-                g.operations.push(format!("RemoveVertexLabel({},{})", name, label));
-            },
+                g.operations
+                    .push(format!("RemoveVertexLabel({},{})", name, label));
+            }
             Self::AddEdgeLabel(e, l) => {
                 let index = get_edge_index(e, edge_map);
                 let lid = get_edge_label_index(l, edge_label_map);
-                g.result
-                    .edge_label
-                    .add_label_mapping(&index, lid)
-                    .unwrap();
+                g.result.edge_label.add_label_mapping(&index, lid).unwrap();
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
                 let label = g.result.edge_label.get_label(lid).unwrap().clone();
-                g.operations.push(format!("AddEdgeLabel({},{})", name, label));
-            },
+                g.operations
+                    .push(format!("AddEdgeLabel({},{})", name, label));
+            }
             Self::CreateEdgeLabel(l, name) => {
                 //FIXME what if the name already exists ? Or the id ?
                 let index = g.result.edge_label.add_label(name.clone());
@@ -131,8 +139,9 @@ impl Operation {
                     .unwrap();
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
                 let label = g.result.edge_label.get_label(lid).unwrap().clone();
-                g.operations.push(format!("RemoveEdgeLabel({},{})", name, label));
-            },
+                g.operations
+                    .push(format!("RemoveEdgeLabel({},{})", name, label));
+            }
             Self::AddVertex(v) => {
                 let index = get_node_index(v, node_map);
                 if g.result.graph.contains_node(index) {
@@ -141,12 +150,12 @@ impl Operation {
                 } else {
                     //TODO Need a name when creating a node.
                     let real_index = g.result.graph.add_node(Properties {
-                        name : "".to_string(),
-                        map : HashMap::new()
+                        name: "".to_string(),
+                        map: HashMap::new(),
                     });
                     node_map.insert(*v, real_index);
                 }
-            },
+            }
             Self::RemoveVertex(v) => {
                 let index = get_node_index(v, node_map);
                 let name = g.result.graph.node_weight(index).unwrap().name.clone();
@@ -154,7 +163,7 @@ impl Operation {
                 g.result.graph.remove_node(index);
                 node_map.remove(v);
                 g.operations.push(format!("RemoveVertex({})", name));
-            },
+            }
             Self::AddEdge(e, start, end) => {
                 let index = get_edge_index(e, edge_map);
                 if g.result.graph.edge_weight(index).is_some() {
@@ -166,14 +175,18 @@ impl Operation {
                     let n2 = get_node_index(end, node_map);
                     let name1 = g.result.graph.node_weight(n1).unwrap().name.clone();
                     let name2 = g.result.graph.node_weight(n2).unwrap().name.clone();
-                    let real_index = g.result.graph.add_edge(n1, n2, Properties {
-                        name : "".to_string(),
-                        map : HashMap::new()
-                    });
+                    let real_index = g.result.graph.add_edge(
+                        n1,
+                        n2,
+                        Properties {
+                            name: "".to_string(),
+                            map: HashMap::new(),
+                        },
+                    );
                     edge_map.insert(*e, real_index);
                     g.operations.push(format!("AddEdge({},{})", name1, name2));
                 }
-            },
+            }
             Self::RemoveEdge(e) => {
                 let index = get_edge_index(e, edge_map);
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
@@ -181,63 +194,123 @@ impl Operation {
                 g.result.graph.remove_edge(index);
                 edge_map.remove(e);
                 g.operations.push(format!("RemoveEdge({})", name));
-            },
+            }
             Self::AddVertexProperty(v, name, value) => {
-                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}"));
+                let prop = g
+                    .result
+                    .graph
+                    .node_weight_mut(get_node_index(v, node_map))
+                    .expect(&format!("Unknown vertex {v}"));
                 prop.map.insert(name.to_string(), value.to_string());
-                g.operations.push(format!("AddVertexProperty({},{},{})", prop.name, name, value));
-            },
+                g.operations.push(format!(
+                    "AddVertexProperty({},{},{})",
+                    prop.name, name, value
+                ));
+            }
             Self::RemoveVertexProperty(v, name) => {
-                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown vertex {v}"));
+                let prop = g
+                    .result
+                    .graph
+                    .node_weight_mut(get_node_index(v, node_map))
+                    .expect(&format!("Unknown vertex {v}"));
                 prop.map.remove(name);
-                g.operations.push(format!("RemoveVertexProperty({},{})", prop.name, name));
-            },
+                g.operations
+                    .push(format!("RemoveVertexProperty({},{})", prop.name, name));
+            }
             Self::AddEdgeProperty(e, name, value) => {
-                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
+                let prop = g
+                    .result
+                    .graph
+                    .edge_weight_mut(get_edge_index(e, edge_map))
+                    .expect(&format!("Unknown edge {e}"));
                 prop.map.insert(name.to_string(), value.to_string());
-                g.operations.push(format!("AddEdgeProperty({},{},{})", prop.name, name, value));
-            },
+                g.operations
+                    .push(format!("AddEdgeProperty({},{},{})", prop.name, name, value));
+            }
             Self::RemoveEdgeProperty(e, name) => {
-                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
+                let prop = g
+                    .result
+                    .graph
+                    .edge_weight_mut(get_edge_index(e, edge_map))
+                    .expect(&format!("Unknown edge {e}"));
                 prop.map.remove(name);
-                g.operations.push(format!("RemoveEdgeProperty({},{})", prop.name, name));
-            },
+                g.operations
+                    .push(format!("RemoveEdgeProperty({},{})", prop.name, name));
+            }
             Self::RenameVertex(v, name) => {
-                let prop = g.result.graph.node_weight_mut(get_node_index(v, node_map)).expect(&format!("Unknown node {v}"));
-                g.operations.push(format!("RenameVertex({},{})", prop.name, name));
+                let prop = g
+                    .result
+                    .graph
+                    .node_weight_mut(get_node_index(v, node_map))
+                    .expect(&format!("Unknown node {v}"));
+                g.operations
+                    .push(format!("RenameVertex({},{})", prop.name, name));
                 prop.name = name.to_string();
-            },
+            }
             Self::RenameEdge(e, name) => {
-                let prop = g.result.graph.edge_weight_mut(get_edge_index(e, edge_map)).expect(&format!("Unknown edge {e}"));
-                g.operations.push(format!("RenameEdge({},{})", prop.name, name));
+                let prop = g
+                    .result
+                    .graph
+                    .edge_weight_mut(get_edge_index(e, edge_map))
+                    .expect(&format!("Unknown edge {e}"));
+                g.operations
+                    .push(format!("RenameEdge({},{})", prop.name, name));
                 prop.name = name.to_string();
-            },
-            Self::MoveEdgeTarget(e,t) => {
+            }
+            Self::MoveEdgeTarget(e, t) => {
                 let edgeindex = get_edge_index(e, edge_map);
                 let src = g.result.graph.edge_endpoints(edgeindex).unwrap().0;
                 let target = get_node_index(t, node_map);
                 let w = g.result.graph.remove_edge(edgeindex).unwrap();
                 let edgename = w.name.clone();
                 let real_index = g.result.graph.add_edge(src, target, w);
-                let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
-                labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
+                let labels: Vec<u32> = g
+                    .result
+                    .edge_label
+                    .element_labels(&edgeindex)
+                    .copied()
+                    .collect();
+                labels.into_iter().for_each(|l| {
+                    g.result
+                        .edge_label
+                        .add_label_mapping(&real_index, l)
+                        .unwrap()
+                });
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
-                g.operations.push(format!("MoveEdgeTarget({},{})", edgename.clone(), g.result.graph.node_weight(target).unwrap().name.clone()));
-            },
-            Self::MoveEdgeSource(e,s) => {
+                g.operations.push(format!(
+                    "MoveEdgeTarget({},{})",
+                    edgename.clone(),
+                    g.result.graph.node_weight(target).unwrap().name.clone()
+                ));
+            }
+            Self::MoveEdgeSource(e, s) => {
                 let edgeindex = get_edge_index(e, edge_map);
                 let target = g.result.graph.edge_endpoints(edgeindex).unwrap().1;
                 let src = get_node_index(s, node_map);
                 let w = g.result.graph.remove_edge(edgeindex).unwrap();
                 let edgename = w.name.clone();
                 let real_index = g.result.graph.add_edge(src, target, w);
-                let labels: Vec<u32> = g.result.edge_label.element_labels(&edgeindex).copied().collect();
-                labels.into_iter().for_each(|l| g.result.edge_label.add_label_mapping(&real_index, l).unwrap());
+                let labels: Vec<u32> = g
+                    .result
+                    .edge_label
+                    .element_labels(&edgeindex)
+                    .copied()
+                    .collect();
+                labels.into_iter().for_each(|l| {
+                    g.result
+                        .edge_label
+                        .add_label_mapping(&real_index, l)
+                        .unwrap()
+                });
                 g.result.edge_label.remove_element(&edgeindex);
                 edge_map.insert(*e, real_index);
-                g.operations.push(format!("MoveEdgeSource({},{})", edgename.clone(), g.result.graph.node_weight(src).unwrap().name.clone()));
-            },
+                g.operations.push(format!(
+                    "MoveEdgeSource({},{})",
+                    edgename.clone(),
+                    g.result.graph.node_weight(src).unwrap().name.clone()
+                ));
+            }
         }
     }
 }
@@ -288,17 +361,18 @@ impl OperationName {
     }
 }
 
-pub fn apply_single_transformation(program: Program, rel_name: &str, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> Vec<GraphTransformation> {
+pub fn apply_single_transformation(
+    program: Program,
+    rel_name: &str,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Vec<GraphTransformation> {
     let mut res = vec![];
     let operations = souffle::generate_operations(program, rel_name, g, target_graph);
     for transfo in operations.values() {
-        let mut ng : GraphTransformation = g.into();
-        let mut node_map = HashMap::new();
-        let mut edge_map = HashMap::new();
-        let mut node_label_map = HashMap::new();
-        let mut edge_label_map = HashMap::new();
+        let mut ng: GraphTransformation = g.into();
         for operation in transfo {
-            operation.apply(&mut ng, &mut node_map, &mut edge_map, &mut node_label_map, &mut edge_label_map);
+            ng.apply(operation);
         }
         if ng.result.check_unique_names() {
             res.push(ng);
@@ -307,8 +381,88 @@ pub fn apply_single_transformation(program: Program, rel_name: &str, g: &Propert
     res
 }
 
-pub fn apply_transformations(program: Program, rel_names: &Vec<&str>, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> Vec<GraphTransformation> {
-    rel_names.iter().flat_map(|name| apply_single_transformation(program, name, g, target_graph)).collect()
+pub fn apply_transformations(
+    program: Program,
+    rel_names: &Vec<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Vec<GraphTransformation> {
+    rel_names
+        .iter()
+        .flat_map(|name| apply_single_transformation(program, name, g, target_graph))
+        .collect()
+}
+
+fn transform_graph_from_tree(
+    tree: &HashMap<i32, Vec<i32>>,
+    current: &i32,
+    mut g: GraphTransformation,
+    result: &mut Vec<GraphTransformation>,
+    seen: &mut HashSet<i32>,
+    id_map: &HashMap<i32, Operation>,
+) {
+    if id_map.contains_key(current) {
+        if seen.contains(current) {
+            result.push(g);
+        } else if !tree.contains_key(current) {
+            seen.insert(*current);
+            let op = id_map.get(current).unwrap();
+            g.apply(op);
+            result.push(g);
+        } else {
+            seen.insert(*current);
+            let branches = tree.get(current).unwrap();
+            if branches.is_empty() {
+                let op = id_map.get(current).unwrap();
+                g.apply(op);
+                result.push(g);
+            } else if branches.len() == 1 {
+                let op = id_map.get(current).unwrap();
+                g.apply(op);
+                transform_graph_from_tree(tree, &branches[0], g, result, seen, id_map);
+            } else {
+                let op = id_map.get(current).unwrap();
+                g.apply(op);
+                for id in branches {
+                    let ng = g.clone();
+                    transform_graph_from_tree(tree, id, ng, result, seen, id_map);
+                }
+            }
+        }
+    }
+}
+
+pub fn transform_graph(
+    program: Program,
+    transformations: &Vec<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Vec<GraphTransformation> {
+    let transfos: HashSet<&str> = transformations.iter().copied().collect();
+    let mut res = Vec::new();
+    let mut seen = HashSet::new();
+    if let Some((
+        trees,
+        id_map
+    )) = generate_operation_trees(
+        program,
+        &transfos,
+        g,
+        target_graph
+    ) {
+        for root in trees.keys() {
+            let transfo = GraphTransformation::from(g);
+            transform_graph_from_tree(
+                trees.get(root).unwrap(),
+                root,
+                transfo,
+                &mut res,
+                &mut seen,
+                &id_map
+            )
+        }
+    }
+    res
 }
 
 /*

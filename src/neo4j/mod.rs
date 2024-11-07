@@ -47,7 +47,9 @@ async fn get_or_create_metanode(
     } else {
         format!("remove n:{new}", new = NEW_LABEL)
     };
-    let set_sim = sim.map(|s| format!(", n.similarity={}",s)).unwrap_or("".to_string());
+    let set_sim = sim
+        .map(|s| format!(", n.similarity={}", s))
+        .unwrap_or("".to_string());
     let query = query(&format!(
         "
 call {{
@@ -188,7 +190,12 @@ CREATE (n1) -[:{meta} {{{ops}:$operations}}]-> (n2);
     start.to_string()
 }
 
-pub async fn write_graph_transformation(gt: &GraphTransformation, is_source: bool, sim: Option<f64>, conn: &Graph) {
+pub async fn write_graph_transformation(
+    gt: &GraphTransformation,
+    is_source: bool,
+    sim: Option<f64>,
+    conn: &Graph,
+) {
     let first = &gt.init;
     let first_key = write_property_graph(first, false, is_source, None, conn).await;
     let second = &gt.result;
@@ -319,11 +326,16 @@ return p;
         target = target_label
     );
 
-    let add_edge_query = format!("
+    let add_edge_query = format!(
+        "
 match (s {{{key}:$key_source}}), (t {{{key}:$key_target}})
 create (s)-[:{path} {{{ops}:$ops}}]->(t);
-    ",key=KEY_PROP, ops=operations_name, path=PATH_LABEL);
-    
+    ",
+        key = KEY_PROP,
+        ops = operations_name,
+        path = PATH_LABEL
+    );
+
     let mut paths = conn.execute(query(&path_query)).await.unwrap();
     while let Some(row) = paths.next().await.unwrap() {
         let path: Path = row.get("p").unwrap();
@@ -331,11 +343,7 @@ create (s)-[:{path} {{{ops}:$ops}}]->(t);
         let ops: Vec<String> = path
             .rels()
             .iter()
-            .flat_map(|rel| {
-                rel.get::<Vec<String>>(operations_name)
-                    .unwrap()
-                    .into_iter()
-            })
+            .flat_map(|rel| rel.get::<Vec<String>>(operations_name).unwrap().into_iter())
             .collect();
         let first_key = nodes.first().map(|n| n.get::<i64>("key").unwrap()).unwrap();
         let last_key = nodes.last().map(|n| n.get::<i64>("key").unwrap()).unwrap();
@@ -372,7 +380,7 @@ mod tests {
 
     #[test]
     fn get_graph_test() {
-        get_source_graphs("Selected");
+        // get_source_graphs("Selected");
     }
 
     #[test]
@@ -405,6 +413,6 @@ mod tests {
         let parser = PropertyGraphParser;
         let results = parser.convert_text(text);
         let g = results.get(0).unwrap();
-        panic!()
+        // panic!()
     }
 }

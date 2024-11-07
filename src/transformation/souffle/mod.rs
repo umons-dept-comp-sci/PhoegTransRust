@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ptr::{null, null_mut}};
+use std::{
+    collections::{HashMap, HashSet},
+    ptr::{null, null_mut},
+};
 
 use cxx::{let_cxx_string, CxxString, UniquePtr};
 use petgraph::visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences, NodeRef};
@@ -120,10 +123,13 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
     fill_relation(
         program,
         relation_names[1],
-        graph.vertex_label.labels().map(|id| (id, graph.vertex_label.get_label(*id).unwrap())),
+        graph
+            .vertex_label
+            .labels()
+            .map(|id| (id, graph.vertex_label.get_label(*id).unwrap())),
         |tup, (id, name)| {
             souffle_ffi::insertNumber(tup, *id);
-            let_cxx_string!(cname=name);
+            let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
         },
     );
@@ -186,10 +192,13 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
     fill_relation(
         program,
         relation_names[7],
-        graph.edge_label.labels().map(|id| (id, graph.edge_label.get_label(*id).unwrap())),
+        graph
+            .edge_label
+            .labels()
+            .map(|id| (id, graph.edge_label.get_label(*id).unwrap())),
         |tup, (id, name)| {
             souffle_ffi::insertNumber(tup, *id);
-            let_cxx_string!(cname=name);
+            let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
         },
     );
@@ -269,123 +278,126 @@ pub fn extract_text(tuple: OutputTuple) -> std::string::String {
 }
 
 impl OperationName {
-    fn construct(&self, t : OutputTuple) -> Operation {
+    fn construct(&self, t: OutputTuple) -> Operation {
         unsafe {
-        match self {
+            match self {
                 Self::CreateVertexLabel => {
                     let label = extract_number(t);
                     let name = extract_text(t);
                     Operation::CreateVertexLabel(label, name)
-                },
+                }
                 Self::CreateEdgeLabel => {
                     let label = extract_number(t);
                     let name = extract_text(t);
                     Operation::CreateEdgeLabel(label, name)
-                },
+                }
                 Self::AddVertexLabel => {
                     let vertex = extract_number(t);
                     let label = extract_number(t);
                     Operation::AddVertexLabel(vertex, label)
-                },
+                }
                 Self::RemoveVertexLabel => {
                     let vertex = extract_number(t);
                     let label = extract_number(t);
                     Operation::RemoveVertexLabel(vertex, label)
-
-                },
+                }
                 Self::AddEdgeLabel => {
                     let edge = extract_number(t);
                     let label = extract_number(t);
                     Operation::AddEdgeLabel(edge, label)
-                },
+                }
                 Self::RemoveEdgeLabel => {
                     let edge = extract_number(t);
                     let label = extract_number(t);
                     Operation::RemoveEdgeLabel(edge, label)
-                },
+                }
                 Self::AddVertex => {
                     let vertex = extract_number(t);
                     Operation::AddVertex(vertex)
-                },
+                }
                 Self::RemoveVertex => {
                     let vertex = extract_number(t);
                     Operation::RemoveVertex(vertex)
-
-                },
+                }
                 Self::AddEdge => {
                     let edge = extract_number(t);
                     let from = extract_number(t);
                     let to = extract_number(t);
                     Operation::AddEdge(edge, from, to)
-                },
+                }
                 Self::RemoveEdge => {
                     let edge = extract_number(t);
                     Operation::RemoveEdge(edge)
-                },
+                }
                 Self::AddVertexProperty => {
                     let vertex = extract_number(t);
                     let name = extract_text(t);
                     let value = extract_text(t);
                     Operation::AddVertexProperty(vertex, name, value)
-                },
+                }
                 Self::RemoveVertexProperty => {
                     let vertex = extract_number(t);
                     let name = extract_text(t);
                     Operation::RemoveVertexProperty(vertex, name)
-
-                },
+                }
                 Self::AddEdgeProperty => {
                     let edge = extract_number(t);
                     let name = extract_text(t);
                     let value = extract_text(t);
                     Operation::AddEdgeProperty(edge, name, value)
-                },
+                }
                 Self::RemoveEdgeProperty => {
                     let edge = extract_number(t);
                     let name = extract_text(t);
                     Operation::RemoveEdgeProperty(edge, name)
-                },
+                }
                 Self::RenameVertex => {
                     let vertex = extract_number(t);
                     let name = extract_text(t);
                     Operation::RenameVertex(vertex, name)
-                },
+                }
                 Self::RenameEdge => {
                     let edge = extract_number(t);
                     let name = extract_text(t);
                     Operation::RenameEdge(edge, name)
-                },
+                }
                 Self::MoveEdgeTarget => {
                     let edge = extract_number(t);
                     let target = extract_number(t);
                     Operation::MoveEdgeTarget(edge, target)
-                },
+                }
                 Self::MoveEdgeSource => {
                     let edge = extract_number(t);
                     let source = extract_number(t);
                     Operation::MoveEdgeSource(edge, source)
-                },
+                }
             }
         }
     }
 }
 
-pub fn generate_operations(program: Program, relation_name: &str, g: &PropertyGraph, target_graph: &Option<PropertyGraph>) -> HashMap<i32, Vec<Operation>> {
+#[deprecated]
+pub fn generate_operations(
+    program: Program,
+    relation_name: &str,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> HashMap<i32, Vec<Operation>> {
     encode_input_graph(program, g);
     if let Some(target) = target_graph {
         encode_target_graph(program, target);
     }
     unsafe {
         souffle_ffi::runProgram(program);
-        let out_relation = get_relation(program, relation_name)
-            .expect("No relation for the transformations.");
+        let out_relation =
+            get_relation(program, relation_name).expect("No relation for the transformations.");
         let mut iter = souffle_ffi::createTupleIterator(out_relation);
         let mut ids = vec![];
         while souffle_ffi::hasNext(&iter) {
             let id = extract_signed(souffle_ffi::getNext(&mut iter));
             ids.push(id);
         }
-        let mut operations : HashMap<i32, Vec<Operation>> = HashMap::new();
+        let mut operations: HashMap<i32, Vec<Operation>> = HashMap::new();
         for operation in OPERATIONS.iter() {
             if let Some(out_relation) = get_relation(program, operation.get_relation()) {
                 let mut iter = souffle_ffi::createTupleIterator(out_relation);
@@ -398,10 +410,81 @@ pub fn generate_operations(program: Program, relation_name: &str, g: &PropertyGr
                         operations.entry(id).or_default().push(op);
                     }
                 }
-
             }
         }
         souffle_ffi::purgeProgram(program);
         operations
+    }
+}
+
+pub type TransfoTrees = HashMap<i32, HashMap<i32, Vec<i32>>>;
+
+pub fn generate_operation_trees(
+    program: Program,
+    transformations: &HashSet<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Option<(TransfoTrees, HashMap<i32, Operation>)> {
+    encode_input_graph(program, g);
+    if let Some(target) = target_graph {
+        encode_target_graph(program, target);
+    }
+    unsafe {
+        souffle_ffi::runProgram(program);
+        if let Some((trees, ids)) = generate_trees(program) {
+            let id_map = extract_ids(program, transformations, ids);
+            souffle_ffi::purgeProgram(program);
+            return Some((trees, id_map));
+        }
+        souffle_ffi::purgeProgram(program);
+    }
+    None
+}
+
+unsafe fn extract_ids(program: Program, transformations: &HashSet<&str>, ids: HashSet<i32>) -> HashMap<i32, Operation> {
+    let mut ops: HashMap<i32, Operation> = HashMap::new();
+    for operation in OPERATIONS.iter() {
+        if let Some(out_relation) = get_relation(program, operation.get_relation()) {
+            let mut iter = souffle_ffi::createTupleIterator(out_relation);
+            while souffle_ffi::hasNext(&iter) {
+                let t = souffle_ffi::getNext(&mut iter);
+                let name = extract_text(t);
+                if transformations.contains(name.as_str()) {
+                    let id = extract_signed(t);
+                    if ids.contains(&id) {
+                        let op = operation.construct(t);
+                        ops.insert(id, op);
+                    }
+                }
+            }
+        }
+    }
+    ops
+}
+
+unsafe fn generate_trees(program: Program) -> Option<(TransfoTrees, HashSet<i32>)> {
+    let next_relation = get_relation(program, "Next_");
+    if let Some(next_relation) = next_relation {
+        let mut trees = HashMap::new();
+        let mut ids = HashSet::new();
+        let mut iter = souffle_ffi::createTupleIterator(next_relation);
+        while souffle_ffi::hasNext(&iter) {
+            let t = souffle_ffi::getNext(&mut iter);
+            let root = extract_signed(t);
+            let prev = extract_signed(t);
+            let next = extract_signed(t);
+            trees
+                .entry(root)
+                .or_insert(HashMap::new())
+                .entry(prev)
+                .or_insert(Vec::new())
+                .push(next);
+            ids.insert(root);
+            ids.insert(prev);
+            ids.insert(next);
+        }
+        Some((trees, ids))
+    } else {
+        None
     }
 }

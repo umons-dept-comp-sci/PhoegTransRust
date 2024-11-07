@@ -36,22 +36,14 @@ impl PartialOrd for SimGraph {
     }
 }
 
-impl Eq for SimGraph {
-
-}
+impl Eq for SimGraph {}
 
 impl Ord for SimGraph {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match self.0 - other.0 {
-            x if x < -EPS => {
-                std::cmp::Ordering::Greater
-            },
-            x if x > EPS => {
-                std::cmp::Ordering::Less
-            },
-            _ => {
-                self.1.cmp(&other.1)
-            }
+            x if x < -EPS => std::cmp::Ordering::Greater,
+            x if x > EPS => std::cmp::Ordering::Less,
+            _ => self.1.cmp(&other.1),
         }
     }
 }
@@ -62,7 +54,7 @@ impl Debug for SimGraph {
     }
 }
 
-impl Display for SimGraph{
+impl Display for SimGraph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.2, f)
     }
@@ -88,9 +80,9 @@ where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
     let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g));
-    let r = apply_transformations(program, trsf, &g, target_graph);
-    let mut bests = BinaryHeap::with_capacity(NUM_BEST+1);
-    let mut stored = HashSet::with_capacity(NUM_BEST+1);
+    let r = transform_graph(program, trsf, &g, target_graph);
+    let mut bests = BinaryHeap::with_capacity(NUM_BEST + 1);
+    let mut stored = HashSet::with_capacity(NUM_BEST + 1);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
@@ -102,7 +94,7 @@ where
                     stored.insert(key.clone());
                     let g_hash = property_graph_minhash(&h.result);
                     let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
-                    bests.push(SimGraph(sim,key,h));
+                    bests.push(SimGraph(sim, key, h));
                     if bests.len() > NUM_BEST {
                         let removed = bests.pop().unwrap();
                         stored.remove(&removed.1);
@@ -159,11 +151,18 @@ fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runti
 }
 
 pub fn output_neo4j(
-    receiver: Receiver<LogInfo>, first_run: bool
+    receiver: Receiver<LogInfo>,
+    first_run: bool,
 ) -> Result<(Option<f64>, Option<u64>), TransProofError> {
     //TODO remove the unwraps
-    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
-    let neograph = runtime.block_on(neo4rs::Graph::new("localhost:7687", "", "")).unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let neograph = runtime
+        .block_on(neo4rs::Graph::new("localhost:7687", "", ""))
+        .unwrap();
     let mut best_key = None;
     let mut best_sim = None;
     let start = Instant::now();
@@ -179,7 +178,12 @@ pub fn output_neo4j(
             }
             LogInfo::TransfoSim(t, _) => {
                 i += 1;
-                runtime.block_on(write_graph_transformation(&t.2, first_run, Some(t.0), &neograph));
+                runtime.block_on(write_graph_transformation(
+                    &t.2,
+                    first_run,
+                    Some(t.0),
+                    &neograph,
+                ));
                 if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
                     best_sim = Some(t.0);
                     best_key = Some(t.1);

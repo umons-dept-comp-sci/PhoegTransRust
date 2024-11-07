@@ -2,13 +2,13 @@
 name = "transrust"
 version = "1.0.0-alpha"
 authors = ["Gauvain Devillez <gauvain.devillez@umons.ac.be>"]
-edition="2021"
+edition = "2021"
 
 [dependencies]
 rayon = "1.0"
 time = "0.2.23"
 docopt = "0.8"
-serde={version="1.0", features=["derive"]}
+serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.5"
 lazy_static = "1.1"
@@ -16,10 +16,16 @@ thiserror = "1.0"
 petgraph = "0.6.4"
 pest = "2.7.8"
 pest_derive = "2.7.8"
-cxx = { version = "1.0.119", features = ["c++17"] }
+cxx = { version = "1.0.129", features = ["c++17"] }
 neo4rs = "0.7.1"
 tokio = "1.38.0"
 probminhash = "0.1.11"
 
 [build-dependencies]
 cxx-build = "1.0.119"
+
+[lib]
+name = "transproof"
+
+[[bin]]
+name = "testnext"
