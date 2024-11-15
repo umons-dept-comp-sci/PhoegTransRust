@@ -101,6 +101,9 @@ FirstFreeEdgeLabelId(mid+1):-
 .decl Transformation(name:symbol)
 .output Transformation
 
+.decl Next_(root: number, previous: number, next: number)
+.output Next_
+
 .decl RemoveVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
 .input RemoveVertexLabel_
 .output RemoveVertexLabel_

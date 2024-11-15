@@ -100,11 +100,7 @@ fn main() -> Result<(), TransProofError> {
             }
         } else {
             for transfo in args.arg_transformations.iter() {
-                if souffle::has_relation(prog, transfo) {
-                    transfos.push(transfo);
-                } else {
-                    warn!("No relation named {}.", transfo);
-                }
+                transfos.push(transfo);
             }
         }
         souffle::free_program(prog);

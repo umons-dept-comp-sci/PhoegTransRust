@@ -1,0 +1,15 @@
+.include "definitions.dl"
+
+Transformation("AddVertexLabel").
+
+AddVertex_("AddVertexLabel", autoinc(), to_unsigned(autoinc())+v):-
+    FirstFreeVertexId(v).
+
+RenameVertex_("AddVertexLabel", autoinc(), v, name):-
+    AddVertex_("AddVertexLabel", _, v),
+    TargetVertexName(_, name),
+    !VertexName(_, name).
+
+Next_(add, add, rename):-
+    AddVertex_("AddVertexLabel", add, v),
+    RenameVertex_("AddVertexLabel", rename, v, _).
