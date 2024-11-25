@@ -108,11 +108,7 @@ FirstFreeEdgeLabelId(mid+1):-
 .input RemoveVertexLabel_
 .output RemoveVertexLabel_
 
-.decl CreateVertexLabel_(transfo:symbol, id: number, label:unsigned, labelname: symbol)
-.input CreateVertexLabel_
-.output CreateVertexLabel_
-
-.decl AddVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
+.decl AddVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned, labelname: symbol)
 .input AddVertexLabel_
 .output AddVertexLabel_
 
@@ -120,11 +116,8 @@ FirstFreeEdgeLabelId(mid+1):-
 .input RemoveEdgeLabel_
 .output RemoveEdgeLabel_
 
-.decl CreateEdgeLabel_(transfo:symbol, id:number, label:unsigned, labelname: symbol)
-.input CreateEdgeLabel_
-.output CreateEdgeLabel_
-
-.decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
+.decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned,
+labelname: symbol)
 .input AddEdgeLabel_
 .output AddEdgeLabel_
 

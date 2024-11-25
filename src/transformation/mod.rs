@@ -38,6 +38,7 @@ static OPERATIONS: [OperationName; 18] = [
     OperationName::RemoveVertex,
 ];
 
+#[derive(Debug)]
 pub enum Operation {
     AddVertexLabel(u32, u32),
     CreateVertexLabel(u32, String),
@@ -400,6 +401,7 @@ fn transform_graph_from_tree(
     result: &mut Vec<GraphTransformation>,
     seen: &mut HashSet<i32>,
     id_map: &HashMap<i32, Operation>,
+    depth: usize
 ) {
     if id_map.contains_key(current) {
         if seen.contains(current) {
@@ -407,6 +409,7 @@ fn transform_graph_from_tree(
         } else if !tree.contains_key(current) {
             seen.insert(*current);
             let op = id_map.get(current).unwrap();
+            println!("{}: {}{:?}",current," ".repeat(depth), op);
             g.apply(op);
             result.push(g);
         } else {
@@ -414,18 +417,21 @@ fn transform_graph_from_tree(
             let branches = tree.get(current).unwrap();
             if branches.is_empty() {
                 let op = id_map.get(current).unwrap();
+                println!("{}: {}{:?}",current," ".repeat(depth), op);
                 g.apply(op);
                 result.push(g);
             } else if branches.len() == 1 {
                 let op = id_map.get(current).unwrap();
+                println!("{}: {}{:?}",current," ".repeat(depth), op);
                 g.apply(op);
-                transform_graph_from_tree(tree, &branches[0], g, result, seen, id_map);
+                transform_graph_from_tree(tree, &branches[0], g, result, seen, id_map, depth+1);
             } else {
                 let op = id_map.get(current).unwrap();
+                println!("{}: {}{:?}",current," ".repeat(depth), op);
                 g.apply(op);
                 for id in branches {
                     let ng = g.clone();
-                    transform_graph_from_tree(tree, id, ng, result, seen, id_map);
+                    transform_graph_from_tree(tree, id, ng, result, seen, id_map, depth+1);
                 }
             }
         }
@@ -458,7 +464,8 @@ pub fn transform_graph(
                 transfo,
                 &mut res,
                 &mut seen,
-                &id_map
+                &id_map,
+                0
             )
         }
     }

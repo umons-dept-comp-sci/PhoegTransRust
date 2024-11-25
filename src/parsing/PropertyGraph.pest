@@ -21,6 +21,6 @@ typeName = @{literal}
 label = @{literal}
 key = @{literal}
 propertyType = @{literal}
-literal = _{ASCII_ALPHANUMERIC+}
+literal = _{(ASCII_ALPHANUMERIC | "_")+}
 and = { "&" }
 WHITESPACE = _{" "|NEWLINE}
