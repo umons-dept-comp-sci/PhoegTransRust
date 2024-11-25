@@ -75,9 +75,14 @@ impl GraphTransformation {
     }
     pub fn apply(&mut self, op: &Operation) {
         match op {
-            Operation::AddVertexLabel(v, l) => {
+            Operation::AddVertexLabel(v, l, name) => {
                 let index = self.get_node_index(v);
-                let lid = self.get_node_label_index(l);
+                let lid = if let Some(index) = self.result.vertex_label.get_id(name) {
+                    *index
+                } else {
+                    self.result.vertex_label.add_label(name.clone())
+                };
+                self.node_label_map.insert(*l, lid);
                 self.result
                     .vertex_label
                     .add_label_mapping(&index, lid)
@@ -86,12 +91,6 @@ impl GraphTransformation {
                 let label = self.result.vertex_label.get_label(lid).unwrap().clone();
                 self.operations
                     .push(format!("AddVertexLabel({},{})", name, label));
-            }
-            Operation::CreateVertexLabel(l, name) => {
-                //FIXME what if the name already exists ? Or the id ?
-                let index = self.result.vertex_label.add_label(name.clone());
-                self.node_label_map.insert(*l, index);
-                self.operations.push(format!("CreateVertexLabel({})", name));
             }
             Operation::RemoveVertexLabel(v, l) => {
                 let index = self.get_node_index(v);
@@ -105,9 +104,14 @@ impl GraphTransformation {
                 self.operations
                     .push(format!("RemoveVertexLabel({},{})", name, label));
             }
-            Operation::AddEdgeLabel(e, l) => {
+            Operation::AddEdgeLabel(e, l, name) => {
                 let index = self.get_edge_index(e);
-                let lid = self.get_edge_label_index(l);
+                let lid = if let Some(index) = self.result.edge_label.get_id(name) {
+                    *index
+                } else {
+                    self.result.edge_label.add_label(name.clone())
+                };
+                self.edge_label_map.insert(*l, lid);
                 self.result
                     .edge_label
                     .add_label_mapping(&index, lid)
@@ -116,12 +120,6 @@ impl GraphTransformation {
                 let label = self.result.edge_label.get_label(lid).unwrap().clone();
                 self.operations
                     .push(format!("AddEdgeLabel({},{})", name, label));
-            }
-            Operation::CreateEdgeLabel(l, name) => {
-                //FIXME what if the name already exists ? Or the id ?
-                let index = self.result.edge_label.add_label(name.clone());
-                self.edge_label_map.insert(*l, index);
-                self.operations.push(format!("CreateEdgeLabel({})", name));
             }
             Operation::RemoveEdgeLabel(e, l) => {
                 let index = self.get_edge_index(e);

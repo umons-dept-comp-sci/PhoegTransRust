@@ -17,13 +17,11 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-static OPERATIONS: [OperationName; 18] = [
+static OPERATIONS: [OperationName; 16] = [
     OperationName::AddVertex,
-    OperationName::CreateVertexLabel,
     OperationName::AddVertexLabel,
     OperationName::AddVertexProperty,
     OperationName::AddEdge,
-    OperationName::CreateEdgeLabel,
     OperationName::AddEdgeLabel,
     OperationName::AddEdgeProperty,
     OperationName::MoveEdgeTarget,
@@ -40,11 +38,9 @@ static OPERATIONS: [OperationName; 18] = [
 
 #[derive(Debug)]
 pub enum Operation {
-    AddVertexLabel(u32, u32),
-    CreateVertexLabel(u32, String),
+    AddVertexLabel(u32, u32, String),
     RemoveVertexLabel(u32, u32),
-    CreateEdgeLabel(u32, String),
-    AddEdgeLabel(u32, u32),
+    AddEdgeLabel(u32, u32, String),
     RemoveEdgeLabel(u32, u32),
     AddVertex(u32),
     RemoveVertex(u32),
@@ -86,9 +82,16 @@ impl Operation {
         edge_label_map: &mut HashMap<u32, u32>,
     ) {
         match self {
-            Self::AddVertexLabel(v, l) => {
+            Self::AddVertexLabel(v, l, name) => {
                 let index = get_node_index(v, node_map);
-                let lid = get_node_label_index(l, node_label_map);
+                let lid = if let Some(id) = g.result.vertex_label.get_id(name) {
+                    *id
+                } else {
+                    let id = g.result.vertex_label.add_label(name.clone());
+                    node_label_map.insert(*l, id);
+                    id
+                };
+                node_label_map.insert(*l, lid);
                 g.result
                     .vertex_label
                     .add_label_mapping(&index, lid)
@@ -97,12 +100,6 @@ impl Operation {
                 let label = g.result.vertex_label.get_label(lid).unwrap().clone();
                 g.operations
                     .push(format!("AddVertexLabel({},{})", name, label));
-            }
-            Self::CreateVertexLabel(l, name) => {
-                //FIXME what if the name already exists ? Or the id ?
-                let index = g.result.vertex_label.add_label(name.clone());
-                node_label_map.insert(*l, index);
-                g.operations.push(format!("CreateVertexLabel({})", name));
             }
             Self::RemoveVertexLabel(v, l) => {
                 let index = get_node_index(v, node_map);
@@ -116,20 +113,21 @@ impl Operation {
                 g.operations
                     .push(format!("RemoveVertexLabel({},{})", name, label));
             }
-            Self::AddEdgeLabel(e, l) => {
+            Self::AddEdgeLabel(e, l, name) => {
                 let index = get_edge_index(e, edge_map);
-                let lid = get_edge_label_index(l, edge_label_map);
+                let lid = if let Some(id) = g.result.edge_label.get_id(name) {
+                    *id
+                } else {
+                    let id = g.result.edge_label.add_label(name.clone());
+                    edge_label_map.insert(*l, id);
+                    id
+                };
+                edge_label_map.insert(*l, lid);
                 g.result.edge_label.add_label_mapping(&index, lid).unwrap();
                 let name = g.result.graph.edge_weight(index).unwrap().name.clone();
                 let label = g.result.edge_label.get_label(lid).unwrap().clone();
                 g.operations
                     .push(format!("AddEdgeLabel({},{})", name, label));
-            }
-            Self::CreateEdgeLabel(l, name) => {
-                //FIXME what if the name already exists ? Or the id ?
-                let index = g.result.edge_label.add_label(name.clone());
-                edge_label_map.insert(*l, index);
-                g.operations.push(format!("CreateEdgeLabel({})", name));
             }
             Self::RemoveEdgeLabel(e, l) => {
                 let index = get_edge_index(e, edge_map);
@@ -317,8 +315,6 @@ impl Operation {
 }
 
 enum OperationName {
-    CreateVertexLabel,
-    CreateEdgeLabel,
     AddVertexLabel,
     RemoveVertexLabel,
     AddEdgeLabel,
@@ -340,8 +336,6 @@ enum OperationName {
 impl OperationName {
     fn get_relation(&self) -> &str {
         match self {
-            Self::CreateVertexLabel => "CreateVertexLabel_",
-            Self::CreateEdgeLabel => "CreateEdgeLabel_",
             Self::AddVertexLabel => "AddVertexLabel_",
             Self::RemoveVertexLabel => "RemoveVertexLabel_",
             Self::AddEdgeLabel => "AddEdgeLabel_",
