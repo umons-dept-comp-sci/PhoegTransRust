@@ -81,20 +81,32 @@
 FirstFreeVertexId(mid+1):-
   mid = max id : Vertex(id).
 
+FirstFreeVertexId(0):-
+  !Vertex(_).
+
 .decl FirstFreeEdgeId(id: unsigned)
 
 FirstFreeEdgeId(mid+1):-
   mid = max id : Edge(id, _, _).
+
+FirstFreeEdgeId(0):-
+  !Edge(_, _, _).
 
 .decl FirstFreeVertexLabelId(id: unsigned)
 
 FirstFreeVertexLabelId(mid+1):-
   mid = max id : VertexLabel(id).
 
+FirstFreeVertexLabelId(0):-
+  !EdgeLabel(_).
+
 .decl FirstFreeEdgeLabelId(id: unsigned)
 
 FirstFreeEdgeLabelId(mid+1):-
   mid = max id : EdgeLabel(id).
+
+FirstFreeEdgeLabelId(0):-
+  !EdgeLabel(_).
 
 // Transformations
 

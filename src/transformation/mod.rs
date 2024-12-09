@@ -399,15 +399,18 @@ fn transform_graph_from_tree(
 ) {
     if id_map.contains_key(current) {
         if seen.contains(current) {
+            let op = id_map.get(current).unwrap();
+            println!("CYCLE {}: {}{:?}",current," ".repeat(depth), op);
             result.push(g);
         } else if !tree.contains_key(current) {
-            seen.insert(*current);
+            // seen.insert(*current);
             let op = id_map.get(current).unwrap();
             println!("{}: {}{:?}",current," ".repeat(depth), op);
             g.apply(op);
             result.push(g);
         } else {
             seen.insert(*current);
+            println!("{}: added {}"," ".repeat(depth),current);
             let branches = tree.get(current).unwrap();
             if branches.is_empty() {
                 let op = id_map.get(current).unwrap();
@@ -428,6 +431,8 @@ fn transform_graph_from_tree(
                     transform_graph_from_tree(tree, id, ng, result, seen, id_map, depth+1);
                 }
             }
+            println!("{}: removed {}"," ".repeat(depth),current);
+            seen.remove(current);
         }
     }
 }

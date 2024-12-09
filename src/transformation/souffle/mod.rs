@@ -102,13 +102,13 @@ where
 {
     if let Some(relation) = get_relation(program, relation_name) {
         for element in elements {
-            print!("{}(",relation_name);
+            // print!("{}(",relation_name);
             unsafe {
                 let tuple = souffle_ffi::createTuple(relation);
                 to_tuple(&tuple, element);
                 souffle_ffi::insertTuple(relation, tuple);
             }
-            println!(").");
+            // println!(").");
         }
     }
 }
@@ -119,7 +119,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         relation_names[0],
         graph.vertex_label.labels(),
         |tup, id| {
-            print!("{}",id);
+            // print!("{}",id);
             souffle_ffi::insertNumber(tup, *id);
         },
     );
@@ -131,7 +131,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
             .labels()
             .map(|id| (id, graph.vertex_label.get_label(*id).unwrap())),
         |tup, (id, name)| {
-            print!("{}, \"{}\"",id, name);
+            // print!("{}, \"{}\"",id, name);
             souffle_ffi::insertNumber(tup, *id);
             let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
@@ -142,7 +142,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         relation_names[2],
         graph.graph.node_references(),
         |tup, node| {
-            print!("{}",node.id().index());
+            // print!("{}",node.id().index());
             souffle_ffi::insertNumber(tup, node.id().index() as u32);
         },
     );
@@ -153,7 +153,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         |tup, node| {
             souffle_ffi::insertNumber(tup, node.id().index() as u32);
             let name = &node.weight().name;
-            print!("{}, \"{}\"",node.id().index(),name);
+            // print!("{}, \"{}\"",node.id().index(),name);
             let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
         },
@@ -166,7 +166,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
             .node_indices()
             .flat_map(|id| std::iter::repeat(id).zip(graph.vertex_label.element_labels(&id))),
         |tup, (vertex, label)| {
-            print!("{}, {}",vertex.index(),label);
+            // print!("{}, {}",vertex.index(),label);
             souffle_ffi::insertNumber(tup, vertex.index() as u32);
             souffle_ffi::insertNumber(tup, *label);
         },
@@ -181,7 +181,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
                 .map(|(n, pair)| (n, pair.0, pair.1))
         }),
         |tup, data| {
-            print!("{}, \"{}\", \"{}\"",data.0.id().index(),data.1,data.2);
+            // print!("{}, \"{}\", \"{}\"",data.0.id().index(),data.1,data.2);
             souffle_ffi::insertNumber(tup, data.0.id().index() as u32);
             let_cxx_string!(name = data.1);
             souffle_ffi::insertText(tup, &name);
@@ -194,7 +194,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         relation_names[6],
         graph.edge_label.labels(),
         |tup, id| {
-            print!("{}",id);
+            // print!("{}",id);
             souffle_ffi::insertNumber(tup, *id);
         },
     );
@@ -206,7 +206,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
             .labels()
             .map(|id| (id, graph.edge_label.get_label(*id).unwrap())),
         |tup, (id, name)| {
-            print!("{}, \"{}\"",id,name);
+            // print!("{}, \"{}\"",id,name);
             souffle_ffi::insertNumber(tup, *id);
             let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
@@ -217,7 +217,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         relation_names[8],
         graph.graph.edge_references(),
         |tup, edge| {
-            print!("{}, {}, {}",edge.id().index(),edge.source().index(),edge.target().index());
+            // print!("{}, {}, {}",edge.id().index(),edge.source().index(),edge.target().index());
             souffle_ffi::insertNumber(tup, edge.id().index() as u32);
             souffle_ffi::insertNumber(tup, edge.source().index() as u32);
             souffle_ffi::insertNumber(tup, edge.target().index() as u32);
@@ -228,7 +228,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         relation_names[9],
         graph.graph.edge_references(),
         |tup, edge| {
-            print!("{}, \"{}\"",edge.id().index(),edge.weight().name);
+            // print!("{}, \"{}\"",edge.id().index(),edge.weight().name);
             souffle_ffi::insertNumber(tup, edge.id().index() as u32);
             let name = &edge.weight().name;
             let_cxx_string!(cname = name);
@@ -250,7 +250,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
             souffle_ffi::insertText(tup, &name);
             let_cxx_string!(value = data.2);
             souffle_ffi::insertText(tup, &value);
-            print!("{}, \"{}\", \"{}\"",data.0.index(),data.1,data.2);
+            // print!("{}, \"{}\", \"{}\"",data.0.index(),data.1,data.2);
         },
     );
     fill_relation(
@@ -263,7 +263,7 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
         |tup, (edge, label)| {
             souffle_ffi::insertNumber(tup, edge.index() as u32);
             souffle_ffi::insertNumber(tup, *label);
-            print!("{}, {}",edge.index(),label);
+            // print!("{}, {}",edge.index(),label);
         },
     );
 }
