@@ -21,35 +21,39 @@ type Relation = *mut souffle_ffi::Relation;
 type InputTuple = UniquePtr<souffle_ffi::tuple>;
 pub type OutputTuple = *const souffle_ffi::tuple;
 
-const INPUT_RELATION_NAMES: [&'static str; 12] = [
-    "VertexLabel",
-    "VertexLabelName",
-    "Vertex",
-    "VertexName",
-    "VertexHasLabel",
-    "VertexProperty",
-    "EdgeLabel",
-    "EdgeLabelName",
-    "Edge",
-    "EdgeName",
-    "EdgeProperty",
-    "EdgeHasLabel",
-];
+struct RelationNames<'a> {
+    vertex_label: &'a str,
+    vertex: &'a str,
+    vertex_has_label: &'a str,
+    vertex_property: &'a str,
+    edge_label: &'a str,
+    edge: &'a str,
+    edge_has_label: &'a str,
+    edge_property: &'a str,
+}
 
-const TARGET_RELATION_NAMES: [&'static str; 12] = [
-    "TargetVertexLabel",
-    "TargetVertexLabelName",
-    "TargetVertex",
-    "TargetVertexName",
-    "TargetVertexHasLabel",
-    "TargetVertexProperty",
-    "TargetEdgeLabel",
-    "TargetEdgeLabelName",
-    "TargetEdge",
-    "TargetEdgeName",
-    "TargetEdgeProperty",
-    "TargetEdgeHasLabel",
-];
+const INPUT_RELATION_NAMES: RelationNames<'static> = RelationNames {
+    vertex_label : "VertexLabel",
+    vertex : "Vertex",
+    vertex_has_label : "VertexHasLabel",
+    vertex_property : "VertexProperty",
+    edge_label : "EdgeLabel",
+    edge : "Edge",
+    edge_has_label : "EdgeHasLabel",
+    edge_property : "EdgeProperty",
+};
+
+// same with target relation names
+const TARGET_RELATION_NAMES: RelationNames<'static> = RelationNames {
+    vertex_label : "TargetVertexLabel",
+    vertex : "TargetVertex",
+    vertex_has_label : "TargetVertexHasLabel",
+    vertex_property : "TargetVertexProperty",
+    edge_label : "TargetEdgeLabel",
+    edge : "TargetEdge",
+    edge_has_label : "TargetEdgeHasLabel",
+    edge_property : "TargetEdgeProperty",
+};
 
 pub fn create_program_instance(name: &str) -> Program {
     let_cxx_string!(cname = name);
@@ -113,76 +117,78 @@ where
     }
 }
 
-fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str; 12]) {
+fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &RelationNames<'static>) {
+    let vid_to_name: HashMap<u32, &str> = graph.graph.node_references()
+        .map(|(index, props)| {
+            (index.id().index() as u32, props.name.as_str())
+        })
+        .collect();
+    let lvid_to_label: HashMap<u32, &str> = graph.vertex_label.labels()
+        .map(|&id| (id, graph.vertex_label.get_label(id).unwrap().as_str()))
+        .collect();
+    let eid_to_name: HashMap<u32, &str> = graph.graph.edge_references()
+        .map(|eref| {
+            (eref.id().index() as u32, eref.weight().name.as_str())
+        })
+        .collect();
+    let leid_to_label: HashMap<u32, &str> = graph.edge_label.labels()
+        .map(|&id| (id, graph.edge_label.get_label(id).unwrap().as_str()))
+        .collect();
     fill_relation(
         program,
-        relation_names[0],
-        graph.vertex_label.labels(),
-        |tup, id| {
+        relation_names.vertex_label,
+        lvid_to_label.values(),
+        |tup, name| {
             // print!("{}",id);
-            souffle_ffi::insertNumber(tup, *id);
-        },
-    );
-    fill_relation(
-        program,
-        relation_names[1],
-        graph
-            .vertex_label
-            .labels()
-            .map(|id| (id, graph.vertex_label.get_label(*id).unwrap())),
-        |tup, (id, name)| {
-            // print!("{}, \"{}\"",id, name);
-            souffle_ffi::insertNumber(tup, *id);
             let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
         },
     );
     fill_relation(
         program,
-        relation_names[2],
+        relation_names.vertex,
         graph.graph.node_references(),
-        |tup, node| {
+        |tup, (_, prop)| {
             // print!("{}",node.id().index());
-            souffle_ffi::insertNumber(tup, node.id().index() as u32);
+            let_cxx_string!(name = &prop.name);
+            souffle_ffi::insertText(tup, &name);
         },
     );
     fill_relation(
         program,
-        relation_names[3],
-        graph.graph.node_references(),
-        |tup, node| {
-            souffle_ffi::insertNumber(tup, node.id().index() as u32);
-            let name = &node.weight().name;
-            // print!("{}, \"{}\"",node.id().index(),name);
-            let_cxx_string!(cname = name);
-            souffle_ffi::insertText(tup, &cname);
-        },
-    );
-    fill_relation(
-        program,
-        relation_names[4],
+        relation_names.vertex_has_label,
         graph
             .graph
             .node_indices()
-            .flat_map(|id| std::iter::repeat(id).zip(graph.vertex_label.element_labels(&id))),
+            .flat_map(|id| 
+                std::iter::repeat(vid_to_name.get(&(id.index() as u32)).unwrap())
+                    .zip(
+                        graph.vertex_label.element_labels(&id)
+                        .map(|&id| lvid_to_label.get(&id).unwrap())
+                    )
+            ),
         |tup, (vertex, label)| {
             // print!("{}, {}",vertex.index(),label);
-            souffle_ffi::insertNumber(tup, vertex.index() as u32);
-            souffle_ffi::insertNumber(tup, *label);
+            let_cxx_string!(vname = vertex);
+            let_cxx_string!(lname = label);
+            souffle_ffi::insertText(tup, &vname);
+            souffle_ffi::insertText(tup, &lname);
         },
     );
     fill_relation(
         program,
-        relation_names[5],
-        graph.graph.node_indices().flat_map(|n| {
-            let weight = graph.graph.node_weight(n).unwrap();
-            std::iter::repeat(n)
-                .zip(weight.map.iter())
-                .map(|(n, pair)| (n, pair.0, pair.1))
-        }),
+        relation_names.vertex_property,
+        graph.graph.node_indices()
+            .flat_map(|n| {
+                let weight = graph.graph.node_weight(n).unwrap();
+                std::iter::repeat(vid_to_name.get(&(n.index() as u32)).unwrap())
+                    .zip(weight.map.iter())
+                    .map(|(n, pair)| (n, pair.0, pair.1))
+            }),
         |tup, data| {
             // print!("{}, \"{}\", \"{}\"",data.0.id().index(),data.1,data.2);
-            souffle_ffi::insertNumber(tup, data.0.id().index() as u32);
+            let_cxx_string!(vname = data.0);
+            souffle_ffi::insertText(tup, &vname);
             let_cxx_string!(name = data.1);
             souffle_ffi::insertText(tup, &name);
             let_cxx_string!(value = data.2);
@@ -191,79 +197,71 @@ fn encode_graph(program: Program, graph: &PropertyGraph, relation_names: &[&str;
     );
     fill_relation(
         program,
-        relation_names[6],
-        graph.edge_label.labels(),
-        |tup, id| {
+        relation_names.edge_label,
+        leid_to_label.values(),
+        |tup, name| {
             // print!("{}",id);
-            souffle_ffi::insertNumber(tup, *id);
-        },
-    );
-    fill_relation(
-        program,
-        relation_names[7],
-        graph
-            .edge_label
-            .labels()
-            .map(|id| (id, graph.edge_label.get_label(*id).unwrap())),
-        |tup, (id, name)| {
-            // print!("{}, \"{}\"",id,name);
-            souffle_ffi::insertNumber(tup, *id);
             let_cxx_string!(cname = name);
             souffle_ffi::insertText(tup, &cname);
         },
     );
     fill_relation(
         program,
-        relation_names[8],
-        graph.graph.edge_references(),
-        |tup, edge| {
+        relation_names.edge,
+        graph.graph.edge_references().map(|eref| (
+            eid_to_name.get(&(eref.id().index() as u32)).unwrap(),
+            vid_to_name.get(&(eref.source().index() as u32)).unwrap(),
+            vid_to_name.get(&(eref.target().index() as u32)).unwrap(),
+        )),
+        |tup, (edge, source, target)| {
             // print!("{}, {}, {}",edge.id().index(),edge.source().index(),edge.target().index());
-            souffle_ffi::insertNumber(tup, edge.id().index() as u32);
-            souffle_ffi::insertNumber(tup, edge.source().index() as u32);
-            souffle_ffi::insertNumber(tup, edge.target().index() as u32);
+            let_cxx_string!(cedge = edge);
+            souffle_ffi::insertText(tup, &cedge);
+            let_cxx_string!(csource = source);
+            souffle_ffi::insertText(tup, &csource);
+            let_cxx_string!(ctarget = target);
+            souffle_ffi::insertText(tup, &ctarget);
         },
     );
     fill_relation(
         program,
-        relation_names[9],
-        graph.graph.edge_references(),
-        |tup, edge| {
-            // print!("{}, \"{}\"",edge.id().index(),edge.weight().name);
-            souffle_ffi::insertNumber(tup, edge.id().index() as u32);
-            let name = &edge.weight().name;
-            let_cxx_string!(cname = name);
-            souffle_ffi::insertText(tup, &cname);
+        relation_names.edge_has_label,
+        graph
+            .graph
+            .edge_indices()
+            .flat_map(|id| 
+                std::iter::repeat(eid_to_name.get(&(id.index() as u32)).unwrap())
+                    .zip(graph.edge_label.element_labels(&id)
+                        .map(|id|
+                            leid_to_label.get(id).unwrap()
+                        )
+                    )
+            ),
+        |tup, (edge, label)| {
+            let_cxx_string!(cedge = edge);
+            souffle_ffi::insertText(tup, &cedge);
+            let_cxx_string!(clabel = label);
+            souffle_ffi::insertText(tup, &clabel);
+            // print!("{}, {}",edge.index(),label);
         },
     );
     fill_relation(
         program,
-        relation_names[10],
-        graph.graph.edge_indices().flat_map(|n| {
-            let weight = graph.graph.edge_weight(n).unwrap();
-            std::iter::repeat(n)
+        relation_names.edge_property,
+        graph.graph.edge_indices().flat_map(|e| {
+            let weight = graph.graph.edge_weight(e).unwrap();
+            std::iter::repeat(eid_to_name.get(&(e.index() as u32)).unwrap())
                 .zip(weight.map.iter())
                 .map(|(n, pair)| (n, pair.0, pair.1))
         }),
         |tup, data| {
-            souffle_ffi::insertNumber(tup, data.0.index() as u32);
+            let_cxx_string!(ename = data.0);
+            souffle_ffi::insertText(tup, &ename);
             let_cxx_string!(name = data.1);
             souffle_ffi::insertText(tup, &name);
             let_cxx_string!(value = data.2);
             souffle_ffi::insertText(tup, &value);
             // print!("{}, \"{}\", \"{}\"",data.0.index(),data.1,data.2);
-        },
-    );
-    fill_relation(
-        program,
-        relation_names[11],
-        graph
-            .graph
-            .edge_indices()
-            .flat_map(|id| std::iter::repeat(id).zip(graph.edge_label.element_labels(&id))),
-        |tup, (edge, label)| {
-            souffle_ffi::insertNumber(tup, edge.index() as u32);
-            souffle_ffi::insertNumber(tup, *label);
-            // print!("{}, {}",edge.index(),label);
         },
     );
 }

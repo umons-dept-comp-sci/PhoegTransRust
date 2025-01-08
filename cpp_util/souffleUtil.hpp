@@ -13,6 +13,14 @@ namespace souffle
         return prog->getRelation(name);
     }
 
+    const souffle::RecordTable& getRecordTable(souffle::SouffleProgram * const &prog) {
+        return prog->getRecordTable();
+    }
+
+    const souffle::SymbolTable& getSymbolTable(souffle::SouffleProgram * const &prog) {
+        return prog->getSymbolTable();
+    }
+
     void runProgram(souffle::SouffleProgram *prog)
     {
         prog->run();
@@ -50,6 +58,19 @@ namespace souffle
         std::unique_ptr<std::string> res = std::make_unique<std::string>();
         ((souffle::tuple &)*t) >> *res;
         return res;
+    }
+
+    rust::Vec<int32_t> unpack_record(const souffle::RecordTable& records, int32_t index, uint32_t arity) {
+        const int32_t* data = records.unpack(index, arity);
+        rust::Vec<int32_t> res;
+        for (uint32_t i = 0; i < arity; i++) {
+            res.push_back(data[i]);
+        }
+        return res;
+    }
+
+    rust::String decode_symbol(const souffle::SymbolTable& symTable, int32_t id) {
+        return rust::String(symTable.decode(id));
     }
 
     void insertTuple(souffle::Relation *rel, std::unique_ptr<souffle::tuple> tuple)
