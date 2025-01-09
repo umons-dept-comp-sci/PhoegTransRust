@@ -1,182 +1,114 @@
 // Source schema
 
-.decl Vertex(id:unsigned)
+.decl Vertex(name:symbol)
 .input Vertex
+.output Vertex
 
-.decl VertexName(id:unsigned, name: symbol)
-.input VertexName
 
-.decl VertexLabel(id:unsigned)
+.decl VertexLabel(name:symbol)
 .input VertexLabel
+.output VertexLabel
 
-.decl VertexLabelName(id:unsigned, name: symbol)
-.input VertexLabelName
 
-.decl VertexHasLabel(elem:unsigned, label:unsigned)
+.decl VertexHasLabel(elem:symbol, label:symbol)
 .input VertexHasLabel
+.output VertexHasLabel
 
-.decl VertexProperty(id:unsigned, name: symbol, value: symbol)
+
+.decl VertexProperty(name:symbol, pname: symbol, value: symbol)
 .input VertexProperty
+.output VertexProperty
 
-.decl EdgeProperty(id:unsigned, name: symbol, value: symbol)
+
+.decl EdgeProperty(name:symbol, pname: symbol, value: symbol)
 .input EdgeProperty
+.output EdgeProperty
 
-.decl Edge(id:unsigned, from:unsigned, to:unsigned)
+
+.decl Edge(name:symbol, from:symbol, to:symbol)
 .input Edge
+.output Edge
 
-.decl EdgeName(id:unsigned, name: symbol)
-.input EdgeName
 
-.decl EdgeLabel(id:unsigned)
+.decl EdgeLabel(name:symbol)
 .input EdgeLabel
+.output EdgeLabel
 
-.decl EdgeLabelName(id:unsigned, name: symbol)
-.input EdgeLabelName
 
-.decl EdgeHasLabel(elem:unsigned, label:unsigned)
+.decl EdgeHasLabel(elem:symbol, label:symbol)
 .input EdgeHasLabel
+.output EdgeHasLabel
+
 
 // Target schema
 
-.decl TargetVertex(name:unsigned)
+.decl TargetVertex(name:symbol)
 .input TargetVertex
+.output TargetVertex
 
-.decl TargetVertexName(id:unsigned, name:symbol)
-.input TargetVertexName
 
-.decl TargetVertexLabel(id:unsigned)
+.decl TargetVertexLabel(name:symbol)
 .input TargetVertexLabel
+.output TargetVertexLabel
 
-.decl TargetVertexLabelName(id:unsigned, name:symbol)
-.input TargetVertexLabelName
 
-.decl TargetVertexHasLabel(elem:unsigned, label:unsigned)
+.decl TargetVertexHasLabel(elem:symbol, label:symbol)
 .input TargetVertexHasLabel
+.output TargetVertexHasLabel
 
-.decl TargetVertexProperty(id:unsigned, name: symbol, value: symbol)
+
+.decl TargetVertexProperty(name:symbol, pname: symbol, value: symbol)
 .input TargetVertexProperty
+.output TargetVertexProperty
 
-.decl TargetEdgeProperty(id:unsigned, name: symbol, value: symbol)
+
+.decl TargetEdgeProperty(name:symbol, pname: symbol, value: symbol)
 .input TargetEdgeProperty
+.output TargetEdgeProperty
 
-.decl TargetEdge(id:unsigned, from:unsigned, to:unsigned)
+
+.decl TargetEdge(name:symbol, from:symbol, to:symbol)
 .input TargetEdge
+.output TargetEdge
 
-.decl TargetEdgeName(id:unsigned, name:symbol)
-.input TargetEdgeName
 
-.decl TargetEdgeLabel(id:unsigned)
+.decl TargetEdgeLabel(name:symbol)
 .input TargetEdgeLabel
+.output TargetEdgeLabel
 
-.decl TargetEdgeLabelName(id:unsigned, name:symbol)
-.input TargetEdgeLabelName
 
-.decl TargetEdgeHasLabel(elem:unsigned, label:unsigned)
+.decl TargetEdgeHasLabel(elem:symbol, label:symbol)
 .input TargetEdgeHasLabel
+.output TargetEdgeHasLabel
 
-// Utilities
-
-.decl FirstFreeVertexId(id: unsigned)
-
-FirstFreeVertexId(mid+1):-
-  mid = max id : Vertex(id).
-
-FirstFreeVertexId(0):-
-  !Vertex(_).
-
-.decl FirstFreeEdgeId(id: unsigned)
-
-FirstFreeEdgeId(mid+1):-
-  mid = max id : Edge(id, _, _).
-
-FirstFreeEdgeId(0):-
-  !Edge(_, _, _).
-
-.decl FirstFreeVertexLabelId(id: unsigned)
-
-FirstFreeVertexLabelId(mid+1):-
-  mid = max id : VertexLabel(id).
-
-FirstFreeVertexLabelId(0):-
-  !EdgeLabel(_).
-
-.decl FirstFreeEdgeLabelId(id: unsigned)
-
-FirstFreeEdgeLabelId(mid+1):-
-  mid = max id : EdgeLabel(id).
-
-FirstFreeEdgeLabelId(0):-
-  !EdgeLabel(_).
 
 // Transformations
 
 .decl Transformation(name:symbol)
+.input Transformation
 .output Transformation
 
-.decl Next_(root: number, previous: number, next: number)
-.output Next_
+.decl Next(root: Operation, previous: Operation, next: Operation)
+.input Next
+.output Next
 
-.decl RemoveVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned)
-.input RemoveVertexLabel_
-.output RemoveVertexLabel_
+.type Operation = AddVertexLabel{vertex: symbol, label: symbol}
+                | RemoveVertexLabel{vertex: symbol, label: symbol}
+                | AddEdgeLabel{edge: symbol, label: symbol}
+                | RemoveEdgeLabel{edge: symbol, label: symbol}
+                | AddVertex{vertex: symbol}
+                | RemoveVertex{vertex: symbol}
+                | AddEdge{edge: symbol, from: symbol, to: symbol}
+                | RemoveEdge{edge: symbol}
+                | AddVertexProperty{vertex: symbol, property: symbol, type: symbol}
+                | RemoveVertexProperty{vertex: symbol, property: symbol}
+                | AddEdgeProperty{edge: symbol, property: symbol, type: symbol}
+                | RemoveEdgeProperty{edge: symbol, property: symbol}
+                | RenameVertex{vertex: symbol, name: symbol}
+                | RenameEdge{edge: symbol, name: symbol}
+                | MoveEdgeTarget{edge: symbol, target: symbol}
+                | MoveEdgeSource{edge: symbol, source: symbol}
 
-.decl AddVertexLabel_(transfo:symbol, id:number, vertex:unsigned, label:unsigned, labelname: symbol)
-.input AddVertexLabel_
-.output AddVertexLabel_
-
-.decl RemoveEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned)
-.input RemoveEdgeLabel_
-.output RemoveEdgeLabel_
-
-.decl AddEdgeLabel_(transfo:symbol, id:number, edge:unsigned, label:unsigned,
-labelname: symbol)
-.input AddEdgeLabel_
-.output AddEdgeLabel_
-
-.decl RemoveVertex_(transfo:symbol, id:number, vertex:unsigned)
-.input RemoveVertex_
-.output RemoveVertex_
-
-.decl AddVertex_(transfo:symbol, id:number, vertex:unsigned)
-.input AddVertex_
-.output AddVertex_
-
-.decl RemoveEdge_(transfo:symbol, id:number, edge:unsigned)
-.input RemoveEdge_
-.output RemoveEdge_
-
-.decl AddEdge_(transfo:symbol, id:number, edge:unsigned, from:unsigned, to:unsigned)
-.input AddEdge_
-.output AddEdge_
-
-.decl RemoveVertexProperty_(transfo:symbol, id:number, vertex:unsigned, name: symbol)
-.input RemoveVertexProperty_
-.output RemoveVertexProperty_
-
-.decl AddVertexProperty_(transfo:symbol, id:number, vertex:unsigned, name:symbol, value:symbol)
-.input AddVertexProperty_
-.output AddVertexProperty_
-
-.decl RemoveEdgeProperty_(transfo:symbol, id:number, edge:unsigned, name:symbol)
-.input RemoveEdgeProperty_
-.output RemoveEdgeProperty_
-
-.decl AddEdgeProperty_(transfo:symbol, id:number, edge:unsigned, name:symbol, value:symbol)
-.input AddEdgeProperty_
-.output AddEdgeProperty_
-
-.decl RenameVertex_(transfo:symbol, id:number, vertex:unsigned, target:symbol)
-.input RenameVertex_
-.output RenameVertex_
-
-.decl RenameEdge_(transfo:symbol, id:number, edge:unsigned, name:symbol)
-.input RenameEdge_
-.output RenameEdge_
-
-.decl MoveEdgeTarget_(transfo:symbol, id:number, edge:unsigned, target:unsigned)
-.input MoveEdgeTarget_
-.output MoveEdgeTarget_
-
-.decl MoveEdgeSource_(transfo:symbol, id:number, edge:unsigned, source:unsigned)
-.input MoveEdgeSource_
-.output MoveEdgeSource_
+.decl ConcreteOperation(op: Operation)
+.input ConcreteOperation
+.output ConcreteOperation

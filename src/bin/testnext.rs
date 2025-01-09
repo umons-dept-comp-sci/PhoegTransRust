@@ -1,4 +1,10 @@
-use transproof::{parsing::PropertyGraphParser, transformation::{souffle::{create_program_instance, generate_operation_trees}, transform_graph}};
+use transproof::{
+    parsing::PropertyGraphParser,
+    transformation::{
+        souffle::{create_program_instance, generate_operation_trees},
+        transform_graph_ids,
+    },
+};
 
 fn main() {
     let text = "CREATE GRAPH TYPE fraudGraphType {
@@ -40,7 +46,7 @@ create graph type grantGraphType {
     let target = results.pop().unwrap();
     let source = results.pop().unwrap();
     let program = create_program_instance("add_vertex");
-    let transfos = transform_graph(program, &vec!["AddVertexLabel"], &source, &Some(target));
+    let transfos = transform_graph_ids(program, &vec!["AddVertexLabel"], &source, &Some(target));
     for transfo in transfos {
         println!("{}", transfo);
     }

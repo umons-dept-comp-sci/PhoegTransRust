@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use log::error;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
-use souffle::generate_operation_trees;
+use souffle::{generate_operation_trees, generate_operation_trees_ids};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::format;
@@ -16,6 +16,94 @@ use std::net::ToSocketAddrs;
 use self::souffle::Program;
 
 pub mod souffle;
+
+#[derive(Clone, Copy)]
+enum OperationName {
+    AddVertexLabel,
+    RemoveVertexLabel,
+    AddEdgeLabel,
+    RemoveEdgeLabel,
+    AddVertex,
+    RemoveVertex,
+    AddEdge,
+    RemoveEdge,
+    AddVertexProperty,
+    RemoveVertexProperty,
+    AddEdgeProperty,
+    RemoveEdgeProperty,
+    RenameVertex,
+    RenameEdge,
+    MoveEdgeTarget,
+    MoveEdgeSource,
+}
+
+impl OperationName {
+    fn get_relation(&self) -> &str {
+        match self {
+            Self::AddVertexLabel => "AddVertexLabel_",
+            Self::RemoveVertexLabel => "RemoveVertexLabel_",
+            Self::AddEdgeLabel => "AddEdgeLabel_",
+            Self::RemoveEdgeLabel => "RemoveEdgeLabel_",
+            Self::AddVertex => "AddVertex_",
+            Self::RemoveVertex => "RemoveVertex_",
+            Self::AddEdge => "AddEdge_",
+            Self::RemoveEdge => "RemoveEdge_",
+            Self::AddVertexProperty => "AddVertexProperty_",
+            Self::RemoveVertexProperty => "RemoveVertexProperty_",
+            Self::AddEdgeProperty => "AddEdgeProperty_",
+            Self::RemoveEdgeProperty => "RemoveEdgeProperty_",
+            Self::RenameVertex => "RenameVertex_",
+            Self::RenameEdge => "RenameEdge_",
+            Self::MoveEdgeTarget => "MoveEdgeTarget_",
+            Self::MoveEdgeSource => "MoveEdgeSource_",
+        }
+    }
+}
+
+impl OperationName {
+
+    fn symbol<'a>(&'a self) -> &'a str {
+        match self {
+            OperationName::AddEdge => "AddEdge",
+            OperationName::AddVertexLabel => "AddVertexLabel",
+            OperationName::RemoveVertexLabel => "RemoveVertexLabel",
+            OperationName::AddEdgeLabel => "AddEdgeLabel",
+            OperationName::RemoveEdgeLabel => "RemoveEdgeLabel",
+            OperationName::AddVertex => "AddVertex",
+            OperationName::RemoveVertex => "RemoveVertex",
+            OperationName::RemoveEdge => "RemoveEdge",
+            OperationName::AddVertexProperty => "AddVertexProperty",
+            OperationName::RemoveVertexProperty => "RemoveVertexProperty",
+            OperationName::AddEdgeProperty => "AddEdgeProperty",
+            OperationName::RemoveEdgeProperty => "RemoveEdgeProperty",
+            OperationName::RenameVertex => "RenameVertex",
+            OperationName::RenameEdge => "RenameEdge",
+            OperationName::MoveEdgeTarget => "MoveEdgeTarget",
+            OperationName::MoveEdgeSource => "MoveEdgeSource",
+        }
+    }
+
+    fn arity(&self) -> u32 {
+        match self {
+            OperationName::AddVertexLabel => 2,
+            OperationName::RemoveVertexLabel => 2,
+            OperationName::AddEdgeLabel => 2,
+            OperationName::RemoveEdgeLabel => 2,
+            OperationName::AddVertex => 1,
+            OperationName::RemoveVertex => 1,
+            OperationName::AddEdge => 3,
+            OperationName::RemoveEdge => 1,
+            OperationName::AddVertexProperty => 3,
+            OperationName::RemoveVertexProperty => 2,
+            OperationName::AddEdgeProperty => 3,
+            OperationName::RemoveEdgeProperty => 2,
+            OperationName::RenameVertex => 2,
+            OperationName::RenameEdge => 2,
+            OperationName::MoveEdgeTarget => 2,
+            OperationName::MoveEdgeSource => 2,
+        }
+    }
+}
 
 static OPERATIONS: [OperationName; 16] = [
     OperationName::AddVertex,
@@ -36,8 +124,61 @@ static OPERATIONS: [OperationName; 16] = [
     OperationName::RemoveVertex,
 ];
 
-#[derive(Debug)]
+lazy_static!{
+    static ref OPERATION_ORDER: Vec<OperationName> = {
+        let mut names = vec![
+            OperationName::AddVertex,
+            OperationName::AddVertexLabel,
+            OperationName::AddVertexProperty,
+            OperationName::AddEdge,
+            OperationName::AddEdgeLabel,
+            OperationName::AddEdgeProperty,
+            OperationName::MoveEdgeTarget,
+            OperationName::MoveEdgeSource,
+            OperationName::RenameVertex,
+            OperationName::RenameEdge,
+            OperationName::RemoveEdgeProperty,
+            OperationName::RemoveEdgeLabel,
+            OperationName::RemoveEdge,
+            OperationName::RemoveVertexProperty,
+            OperationName::RemoveVertexLabel,
+            OperationName::RemoveVertex,
+        ];
+        names.sort_by(|name1, name2| name1.symbol().cmp(name2.symbol()));
+        names
+    };
+}
+
+fn name_from_order(v: i32) -> Option<OperationName> {
+    if 0 <= v && v < OPERATION_ORDER.len() as i32 {
+        Some(OPERATION_ORDER[v as usize])
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Operation {
+    AddVertexLabel(String, String),
+    RemoveVertexLabel(String, String),
+    AddEdgeLabel(String, String),
+    RemoveEdgeLabel(String, String),
+    AddVertex(String),
+    RemoveVertex(String),
+    AddEdge(String, String, String),
+    RemoveEdge(String),
+    AddVertexProperty(String, String, String),
+    RemoveVertexProperty(String, String),
+    AddEdgeProperty(String, String, String),
+    RemoveEdgeProperty(String, String),
+    RenameVertex(String, String),
+    RenameEdge(String, String),
+    MoveEdgeTarget(String, String),
+    MoveEdgeSource(String, String),
+}
+
+#[derive(Debug)]
+pub enum OperationWithIds {
     AddVertexLabel(u32, u32, String),
     RemoveVertexLabel(u32, u32),
     AddEdgeLabel(u32, u32, String),
@@ -72,7 +213,7 @@ fn get_edge_label_index(id: &u32, edge_label_map: &HashMap<u32, u32>) -> u32 {
     *edge_label_map.get(id).unwrap_or(id)
 }
 
-impl Operation {
+impl OperationWithIds {
     fn apply(
         &self,
         g: &mut GraphTransformation,
@@ -314,47 +455,6 @@ impl Operation {
     }
 }
 
-enum OperationName {
-    AddVertexLabel,
-    RemoveVertexLabel,
-    AddEdgeLabel,
-    RemoveEdgeLabel,
-    AddVertex,
-    RemoveVertex,
-    AddEdge,
-    RemoveEdge,
-    AddVertexProperty,
-    RemoveVertexProperty,
-    AddEdgeProperty,
-    RemoveEdgeProperty,
-    RenameVertex,
-    RenameEdge,
-    MoveEdgeTarget,
-    MoveEdgeSource,
-}
-
-impl OperationName {
-    fn get_relation(&self) -> &str {
-        match self {
-            Self::AddVertexLabel => "AddVertexLabel_",
-            Self::RemoveVertexLabel => "RemoveVertexLabel_",
-            Self::AddEdgeLabel => "AddEdgeLabel_",
-            Self::RemoveEdgeLabel => "RemoveEdgeLabel_",
-            Self::AddVertex => "AddVertex_",
-            Self::RemoveVertex => "RemoveVertex_",
-            Self::AddEdge => "AddEdge_",
-            Self::RemoveEdge => "RemoveEdge_",
-            Self::AddVertexProperty => "AddVertexProperty_",
-            Self::RemoveVertexProperty => "RemoveVertexProperty_",
-            Self::AddEdgeProperty => "AddEdgeProperty_",
-            Self::RemoveEdgeProperty => "RemoveEdgeProperty_",
-            Self::RenameVertex => "RenameVertex_",
-            Self::RenameEdge => "RenameEdge_",
-            Self::MoveEdgeTarget => "MoveEdgeTarget_",
-            Self::MoveEdgeSource => "MoveEdgeSource_",
-        }
-    }
-}
 
 pub fn apply_single_transformation(
     program: Program,
@@ -367,7 +467,7 @@ pub fn apply_single_transformation(
     for transfo in operations.values() {
         let mut ng: GraphTransformation = g.into();
         for operation in transfo {
-            ng.apply(operation);
+            ng.apply_ids(operation);
         }
         if ng.result.check_unique_names() {
             res.push(ng);
@@ -389,12 +489,65 @@ pub fn apply_transformations(
 }
 
 fn transform_graph_from_tree(
+    tree: &HashMap<Operation, Vec<Operation>>,
+    current: &Operation,
+    mut g: GraphTransformation,
+    result: &mut Vec<GraphTransformation>,
+    seen: &mut HashSet<Operation>,
+    depth: usize
+) {
+    if seen.contains(current) {
+        println!("CYCLE {}{:?}","  ".repeat(depth),current);
+        result.push(g);
+    } else if !tree.contains_key(current) {
+        // seen.insert(*current);
+        println!("{}{:?}","  ".repeat(depth),current);
+        if g.apply(current).is_some() {
+            result.push(g);
+        } else {
+            println!("ERROR");
+        }
+    } else {
+        seen.insert(current.clone());
+        // println!("{}: added {:?}"," ".repeat(depth),current);
+        let branches = tree.get(current).unwrap();
+        if branches.is_empty() {
+            println!("{}{:?}","  ".repeat(depth), current);
+            if g.apply(current).is_some() {
+                result.push(g);
+            } else {
+                println!("ERROR");
+            }
+        } else if branches.len() == 1 {
+            println!("{}{:?}","  ".repeat(depth), current);
+            if g.apply(current).is_some() {
+                transform_graph_from_tree(tree, &branches[0], g, result, seen, depth+1);
+            } else {
+                println!("ERROR");
+            }
+        } else {
+            println!("{}{:?}","  ".repeat(depth), current);
+            if g.apply(current).is_some() {
+                for id in branches {
+                    let ng = g.clone();
+                    transform_graph_from_tree(tree, id, ng, result, seen, depth+1);
+                }
+            } else {
+                println!("ERROR");
+            }
+        }
+        // println!("{}: removed {:?}"," ".repeat(depth),current);
+        seen.remove(current);
+    }
+}
+
+fn transform_graph_from_tree_ids(
     tree: &HashMap<i32, Vec<i32>>,
     current: &i32,
     mut g: GraphTransformation,
     result: &mut Vec<GraphTransformation>,
     seen: &mut HashSet<i32>,
-    id_map: &HashMap<i32, Operation>,
+    id_map: &HashMap<i32, OperationWithIds>,
     depth: usize
 ) {
     if id_map.contains_key(current) {
@@ -406,7 +559,7 @@ fn transform_graph_from_tree(
             // seen.insert(*current);
             let op = id_map.get(current).unwrap();
             println!("{}: {}{:?}",current," ".repeat(depth), op);
-            g.apply(op);
+            g.apply_ids(op);
             result.push(g);
         } else {
             seen.insert(*current);
@@ -415,20 +568,20 @@ fn transform_graph_from_tree(
             if branches.is_empty() {
                 let op = id_map.get(current).unwrap();
                 println!("{}: {}{:?}",current," ".repeat(depth), op);
-                g.apply(op);
+                g.apply_ids(op);
                 result.push(g);
             } else if branches.len() == 1 {
                 let op = id_map.get(current).unwrap();
                 println!("{}: {}{:?}",current," ".repeat(depth), op);
-                g.apply(op);
-                transform_graph_from_tree(tree, &branches[0], g, result, seen, id_map, depth+1);
+                g.apply_ids(op);
+                transform_graph_from_tree_ids(tree, &branches[0], g, result, seen, id_map, depth+1);
             } else {
                 let op = id_map.get(current).unwrap();
                 println!("{}: {}{:?}",current," ".repeat(depth), op);
-                g.apply(op);
+                g.apply_ids(op);
                 for id in branches {
                     let ng = g.clone();
-                    transform_graph_from_tree(tree, id, ng, result, seen, id_map, depth+1);
+                    transform_graph_from_tree_ids(tree, id, ng, result, seen, id_map, depth+1);
                 }
             }
             println!("{}: removed {}"," ".repeat(depth),current);
@@ -446,10 +599,7 @@ pub fn transform_graph(
     let transfos: HashSet<&str> = transformations.iter().copied().collect();
     let mut res = Vec::new();
     let mut seen = HashSet::new();
-    if let Some((
-        trees,
-        id_map
-    )) = generate_operation_trees(
+    if let Some(trees) = generate_operation_trees(
         program,
         &transfos,
         g,
@@ -458,6 +608,39 @@ pub fn transform_graph(
         for root in trees.keys() {
             let transfo = GraphTransformation::from(g);
             transform_graph_from_tree(
+                trees.get(root).unwrap(),
+                root,
+                transfo,
+                &mut res,
+                &mut seen,
+                0
+            )
+        }
+    }
+    res
+}
+
+pub fn transform_graph_ids(
+    program: Program,
+    transformations: &Vec<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Vec<GraphTransformation> {
+    let transfos: HashSet<&str> = transformations.iter().copied().collect();
+    let mut res = Vec::new();
+    let mut seen = HashSet::new();
+    if let Some((
+        trees,
+        id_map
+    )) = generate_operation_trees_ids(
+        program,
+        &transfos,
+        g,
+        target_graph
+    ) {
+        for root in trees.keys() {
+            let transfo = GraphTransformation::from(g);
+            transform_graph_from_tree_ids(
                 trees.get(root).unwrap(),
                 root,
                 transfo,
