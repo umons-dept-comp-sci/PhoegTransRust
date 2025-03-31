@@ -7,6 +7,7 @@ use std::{
     ops::AddAssign,
 };
 
+use petgraph::visit::NodeRef;
 use petgraph::{
     algo::is_isomorphic_matching,
     graph::{DiGraph, EdgeIndex, NodeIndex},
@@ -397,11 +398,15 @@ pub fn generate_key(p: &PropertyGraph) -> String {
 
 fn hash_edge<H: std::hash::Hasher>(
     edge_name: Cow<str>,
+    from: Cow<str>,
+    to: Cow<str>,
     edge_id: EdgeIndex,
     g: &PropertyGraph,
     state: &mut H,
 ) {
     edge_name.hash(state);
+    from.hash(state);
+    to.hash(state);
     let mut props: Vec<(Cow<str>, Cow<str>)> = g
         .graph
         .edge_weight(edge_id)
@@ -451,14 +456,14 @@ fn hash_node<H: std::hash::Hasher>(
         .collect();
     labels.sort();
     labels.into_iter().for_each(|l| l.hash(state));
-    let mut edges: Vec<(EdgeIndex, Cow<str>)> = g
+    let mut edges: Vec<(EdgeIndex, Cow<str>, Cow<str>, Cow<str>)> = g
         .graph
         .edges_directed(node_id, petgraph::EdgeDirection::Outgoing)
-        .map(|e| (e.id(), Cow::from(&e.weight().name)))
+        .map(|e| (e.id(), Cow::from(&e.weight().name), node_name.clone(), Cow::from(g.graph.node_weight(e.target()).unwrap().name.clone())))
         .collect();
-    edges.sort_by(|(_, name1), (_, name2)| name1.cmp(name2));
-    for (edge_id, edge_name) in edges.into_iter() {
-        hash_edge(edge_name, edge_id, g, state);
+    edges.sort_by(|(_, name1, _, _), (_, name2, _, _)| name1.cmp(name2));
+    for (edge_id, edge_name, from, to) in edges.into_iter() {
+        hash_edge(edge_name, from, to, edge_id, g, state);
     }
 }
 
