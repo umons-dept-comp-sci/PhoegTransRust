@@ -152,7 +152,7 @@ impl GraphTransformation {
             }
             Operation::AddVertex(v) => {
                 if self.node_ids.contains_key(v) {
-                    error!("Node {v} already exists.");
+                    // error!("Node {v} already exists.");
                     return None;
                 } else {
                     let real_index = self.result.graph.add_node(Properties {
@@ -170,7 +170,7 @@ impl GraphTransformation {
             }
             Operation::AddEdge(e, start, end) => {
                 if self.edge_ids.contains_key(e) {
-                    error!("Edge {e} already exists.");
+                    // error!("Edge {e} already exists.");
                     return None;
                 } else {
                     let n1 = self.node_ids.get(start)?;
@@ -320,8 +320,8 @@ impl GraphTransformation {
             OperationWithIds::AddVertex(v) => {
                 let index = self.get_node_index(v);
                 if self.result.graph.contains_node(index) {
-                    error!("Node {v} already exists.");
-                    panic!("Node {v} already exists.");
+                    // error!("Node {v} already exists.");
+                    // panic!("Node {v} already exists.");
                 } else {
                     //TODO Need a name when creating a node.
                     let real_index = self.result.graph.add_node(Properties {
@@ -342,8 +342,8 @@ impl GraphTransformation {
             OperationWithIds::AddEdge(e, start, end) => {
                 let index = self.get_edge_index(e);
                 if self.result.graph.edge_weight(index).is_some() {
-                    error!("Edge {e} already exists.");
-                    panic!("Edge {e} already exists.");
+                    // error!("Edge {e} already exists.");
+                    // panic!("Edge {e} already exists.");
                 } else {
                     //TODO Need a name when creating an edge.
                     let n1 = self.get_node_index(start);

@@ -5,6 +5,7 @@ use crate::property_graph::PropertyGraph;
 use crate::similarity::property_graph_minhash;
 use crate::transformation::*;
 use crate::utils::plural;
+use crate::constants::NUM_BEST;
 use log::info;
 use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
@@ -16,13 +17,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{stdout, BufWriter, Write};
 use std::sync::mpsc::{Receiver, SendError, Sender, SyncSender};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use self::souffle::{create_program_instance, Program};
-
-const NUM_BEST: usize = 5;
 const EPS: f64 = 1e-12;
-pub struct SimGraph(f64, u64, GraphTransformation);
+pub struct SimGraph(f64, i64, GraphTransformation);
 
 impl PartialEq for SimGraph {
     fn eq(&self, other: &Self) -> bool {
@@ -81,21 +80,22 @@ where
 {
     let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g));
     let r = transform_graph(program, trsf, &g, target_graph);
-    let mut bests = BinaryHeap::with_capacity(NUM_BEST + 1);
-    let mut stored = HashSet::with_capacity(NUM_BEST + 1);
+    let num_bests = NUM_BEST.get().unwrap();
+    let mut bests = BinaryHeap::with_capacity(num_bests + 1);
+    let mut stored = HashSet::with_capacity(num_bests + 1);
     for h in r {
         let s = apply_filters(&h, ftrs.clone());
         if let Ok(_res) = s {
             let mut hash = DefaultHasher::new();
             h.result.hash(&mut hash);
-            let key = hash.finish();
+            let key: i64 = hash.finish() as i64;
             if let Some(target_hash) = target_hash.as_ref() {
                 if !stored.contains(&key) {
                     stored.insert(key.clone());
                     let g_hash = property_graph_minhash(&h.result);
                     let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
                     bests.push(SimGraph(sim, key, h));
-                    if bests.len() > NUM_BEST {
+                    if bests.len() > *num_bests {
                         let removed = bests.pop().unwrap();
                         stored.remove(&removed.1);
                     }
@@ -153,7 +153,7 @@ fn store_property_graph(g: &PropertyGraph, db: &neo4rs::Graph, rt: &tokio::runti
 pub fn output_neo4j(
     receiver: Receiver<LogInfo>,
     first_run: bool,
-) -> Result<(Option<f64>, Option<u64>), TransProofError> {
+) -> Result<(Option<f64>, Option<i64>), TransProofError> {
     //TODO remove the unwraps
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
@@ -166,6 +166,7 @@ pub fn output_neo4j(
     let mut best_key = None;
     let mut best_sim = None;
     let start = Instant::now();
+    let mut neo4j_time = Duration::new(0, 0);
     let mut i = 0;
     for log in receiver.iter() {
         match log {
@@ -178,13 +179,17 @@ pub fn output_neo4j(
             }
             LogInfo::TransfoSim(t, _) => {
                 i += 1;
+                let neotime = Instant::now();
                 runtime.block_on(write_graph_transformation(
                     &t.2,
                     first_run,
                     Some(t.0),
                     &neograph,
                 ));
+                neo4j_time += neotime.elapsed();
                 if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
+                    info!("New best: {}", t.0);
+                    info!("Best key: {}", t.1);
                     best_sim = Some(t.0);
                     best_key = Some(t.1);
                 }
@@ -217,6 +222,11 @@ pub fn output_neo4j(
         millis,
         plural(millis)
     );
+    info!(
+        "Neo4j took {} seconds and {} milliseconds",
+        neo4j_time.as_secs(),
+        neo4j_time.subsec_millis()
+    );
     Ok((best_sim, best_key))
 }
 
@@ -225,7 +235,7 @@ pub fn output(
     filename: String,
     buffer: usize,
     append: bool,
-) -> Result<(Option<f64>, Option<u64>), TransProofError> {
+) -> Result<(Option<f64>, Option<i64>), TransProofError> {
     let mut bufout: Box<dyn Write> = match filename.as_str() {
         "-" => Box::new(BufWriter::with_capacity(buffer, stdout())),
         _ => Box::new(BufWriter::with_capacity(

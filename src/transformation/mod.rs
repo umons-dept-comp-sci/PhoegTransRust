@@ -285,8 +285,8 @@ impl OperationWithIds {
             Self::AddVertex(v) => {
                 let index = get_node_index(v, node_map);
                 if g.result.graph.contains_node(index) {
-                    error!("Node {v} already exists.");
-                    panic!("Node {v} already exists.");
+                    // error!("Node {v} already exists.");
+                    // panic!("Node {v} already exists.");
                 } else {
                     //TODO Need a name when creating a node.
                     let real_index = g.result.graph.add_node(Properties {
@@ -307,8 +307,8 @@ impl OperationWithIds {
             Self::AddEdge(e, start, end) => {
                 let index = get_edge_index(e, edge_map);
                 if g.result.graph.edge_weight(index).is_some() {
-                    error!("Edge {e} already exists.");
-                    panic!("Edge {e} already exists.");
+                    // error!("Edge {e} already exists.");
+                    // panic!("Edge {e} already exists.");
                 } else {
                     //TODO Need a name when creating an edge.
                     let n1 = get_node_index(start, node_map);
@@ -488,6 +488,19 @@ pub fn apply_transformations(
         .collect()
 }
 
+macro_rules! indentprintln {
+    ($txt:literal,$depth:expr $(,$params:expr)*) => {
+        log::debug!(concat!("{}",$txt),"  ".repeat($depth),$($params),*);
+    };
+}
+
+fn print_and_test(depth: usize, op: &Operation, g: &mut GraphTransformation) -> bool {
+    let r = g.apply(op);
+    let text = if r.is_some() {""} else {" ERROR"};
+    indentprintln!("{:?}{}",depth,op,text);
+    r.is_some()
+}
+
 fn transform_graph_from_tree(
     tree: &HashMap<Operation, Vec<Operation>>,
     current: &Operation,
@@ -497,43 +510,30 @@ fn transform_graph_from_tree(
     depth: usize
 ) {
     if seen.contains(current) {
-        println!("CYCLE {}{:?}","  ".repeat(depth),current);
+        indentprintln!("{:?} CYCLE",depth,current);
         result.push(g);
     } else if !tree.contains_key(current) {
         // seen.insert(*current);
-        println!("{}{:?}","  ".repeat(depth),current);
-        if g.apply(current).is_some() {
+        if print_and_test(depth, current, &mut g) {
             result.push(g);
-        } else {
-            println!("ERROR");
         }
+        indentprintln!("END OF BRANCH",depth);
     } else {
         seen.insert(current.clone());
         // println!("{}: added {:?}"," ".repeat(depth),current);
         let branches = tree.get(current).unwrap();
         if branches.is_empty() {
-            println!("{}{:?}","  ".repeat(depth), current);
-            if g.apply(current).is_some() {
+            if print_and_test(depth, current, &mut g) {
                 result.push(g);
-            } else {
-                println!("ERROR");
             }
         } else if branches.len() == 1 {
-            println!("{}{:?}","  ".repeat(depth), current);
-            if g.apply(current).is_some() {
+            if print_and_test(depth, current, &mut g) {
                 transform_graph_from_tree(tree, &branches[0], g, result, seen, depth+1);
-            } else {
-                println!("ERROR");
             }
-        } else {
-            println!("{}{:?}","  ".repeat(depth), current);
-            if g.apply(current).is_some() {
-                for id in branches {
-                    let ng = g.clone();
-                    transform_graph_from_tree(tree, id, ng, result, seen, depth+1);
-                }
-            } else {
-                println!("ERROR");
+        } else if print_and_test(depth, current, &mut g) {
+            for id in branches {
+                let ng = g.clone();
+                transform_graph_from_tree(tree, id, ng, result, seen, depth+1);
             }
         }
         // println!("{}: removed {:?}"," ".repeat(depth),current);

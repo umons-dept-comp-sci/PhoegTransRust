@@ -2,20 +2,25 @@ use docopt::Docopt;
 use log::{debug, error, info, warn};
 use neo4j::add_label;
 use serde::Deserialize;
-use transproof::{compute, errors, neo4j, transformation, utils};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
+use transproof::neo4j::{GreedySource, NaiveSource};
+use transproof::{compute, errors, neo4j, transformation, utils};
 
 use compute::*;
 use errors::*;
 use transformation::*;
 use utils::*;
+use transproof::constants::NUM_BEST;
 
-use transproof::{graph_transformation::GraphTransformation, parsing::PropertyGraphParser, property_graph::PropertyGraph};
+use transproof::{
+    graph_transformation::GraphTransformation, parsing::PropertyGraphParser,
+    property_graph::PropertyGraph,
+};
 
 const MAX_TURNS: usize = 3;
 const MIN_IMPROV: f64 = 0.1;
@@ -55,6 +60,7 @@ Options:
     --neo4j                Writes the output in a Neo4j database. Incompatible with -o.
     -L, --label <label>    Reads graphs from metanodes in Neo4j database having the given label. Incompatible with -i.
     --target <target>      File containing the target schema.
+    -p, --prune <prune>    Number of best results to keep. [default: 6]
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -69,11 +75,11 @@ struct Args {
     flag_t: usize,
     flag_c: usize,
     flag_append: bool,
-    flag_neo4j : bool,
+    flag_neo4j: bool,
     flag_target: Option<String>,
     flag_L: Option<String>,
+    flag_p: Option<usize>,
 }
-
 
 fn main() -> Result<(), TransProofError> {
     // Parsing args
@@ -83,7 +89,7 @@ fn main() -> Result<(), TransProofError> {
     let verbose = args.flag_v;
 
     let prog = souffle::create_program_instance(&args.arg_program);
-    let mut transfos : Vec<&str> = vec![];
+    let mut transfos: Vec<&str> = vec![];
     if prog.is_null() {
         error!("Unknown program: {}", args.arg_program);
         panic!("Unknown program: {}", args.arg_program);
@@ -130,24 +136,29 @@ fn main() -> Result<(), TransProofError> {
     let program = args.arg_program;
     let neo4j = args.flag_neo4j;
     let label = args.flag_L;
+    NUM_BEST.set(args.flag_p.unwrap()).expect("Failed to set NUM_BEST");
 
     if filename != "-" && label.is_some() {
         error!("Option -L is not compatible with -i.");
         panic!("Option -L is not compatible with -i.");
     }
-    let target_graph: Option<PropertyGraph> = args.flag_target.map(|fname| -> Result<PropertyGraph, std::io::Error> {
-        let mut buf = BufReader::new(File::open(fname)?);
-        let mut text = String::new();
-        buf.read_to_string(&mut text)?;
-        let parser = PropertyGraphParser;
-        let mut v = parser.convert_text(&text);
-        if v.len() != 1 {
-            error!("Only one target schema is supported. Found {}.", v.len());
-            panic!("Only one target schema is supported. Found {}.", v.len());
-        }
-        let target = v.drain(0..1).next().unwrap();
-        Ok(target)
-    }).transpose().unwrap();
+    let target_graph: Option<PropertyGraph> = args
+        .flag_target
+        .map(|fname| -> Result<PropertyGraph, std::io::Error> {
+            let mut buf = BufReader::new(File::open(fname)?);
+            let mut text = String::new();
+            buf.read_to_string(&mut text)?;
+            let parser = PropertyGraphParser;
+            let mut v = parser.convert_text(&text);
+            if v.len() != 1 {
+                error!("Only one target schema is supported. Found {}.", v.len());
+                panic!("Only one target schema is supported. Found {}.", v.len());
+            }
+            let target = v.drain(0..1).next().unwrap();
+            Ok(target)
+        })
+        .transpose()
+        .unwrap();
 
     if (outfilename != "-" || append) && neo4j {
         error!("Option --neo4j is not compatible with -o or -a.");
@@ -197,13 +208,25 @@ fn main() -> Result<(), TransProofError> {
             whandle = builder.spawn(move || output_neo4j(result_receiver, first_run))?;
         } else {
             let outfilename = outfilename.clone();
-            whandle = builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
+            whandle =
+                builder.spawn(move || output(result_receiver, outfilename, buffer, append))?;
         }
 
         let v;
-        println!("{} {:?}", looping, previous_sim);
+        if looping {
+            match previous_sim.zip(previous_sig) {
+                Some((sim, sig)) => {
+                    info!("Best similarity so far: {}", sim);
+                    info!("Reached by: {}", sig as i64);
+                },
+                None => info!("First run"),
+            }
+        }
         if label.is_some() || (looping && previous_sim.is_some()) {
-            v = neo4j::get_source_graphs(&label.clone().unwrap_or(neo4j::NEW_LABEL.to_string()));
+            v = neo4j::get_source_graphs(
+                &label.clone().unwrap_or(neo4j::NEW_LABEL.to_string()),
+                NaiveSource,
+            );
         } else {
             let parser = PropertyGraphParser;
             let mut text = String::new();
@@ -211,9 +234,16 @@ fn main() -> Result<(), TransProofError> {
             v = parser.convert_text(&text);
         }
         if !v.is_empty() {
-            handle_graphs(&program, v, result_sender.clone(), &transfos, deftest.clone(), target_graph.clone())?;
+            handle_graphs(
+                &program,
+                v,
+                result_sender.clone(),
+                &transfos,
+                deftest.clone(),
+                target_graph.clone(),
+            )?;
         } else {
-            println!("empty set");
+            info!("No schemas left to transform.");
             looping = false;
         }
         drop(result_sender);
@@ -250,6 +280,10 @@ fn main() -> Result<(), TransProofError> {
         info!("Best similarity: {}", best_sim);
         info!("Reached by: {}", best_sig as i64);
     }
-    neo4j::compute_paths(neo4j::SOURCE_LABEL, neo4j::TARGET_LABEL, neo4j::OPERATIONS_PROP);
+    neo4j::compute_paths(
+        neo4j::SOURCE_LABEL,
+        neo4j::TARGET_LABEL,
+        neo4j::OPERATIONS_PROP,
+    );
     Ok(())
 }

@@ -2,14 +2,15 @@
 
 Transformation("AddVertexLabel").
 
-AddVertex_("AddVertexLabel", autoinc(), to_unsigned(autoinc())+v):-
-    FirstFreeVertexId(v).
+ConcreteOperation($AddVertexLabel(vertex, label)):-
+    TargetVertex(vertex),
+    TargetVertexLabel(label),
+    !VertexHasLabel(vertex, label).
 
-RenameVertex_("AddVertexLabel", autoinc(), v, name):-
-    AddVertex_("AddVertexLabel", _, v),
-    TargetVertexName(_, name),
-    !VertexName(_, name).
+ConcreteOperation($AddVertex(vertex)):-
+    !Vertex(vertex),
+    TargetVertex(vertex).
 
-Next_(add, add, rename):-
-    AddVertex_("AddVertexLabel", add, v),
-    RenameVertex_("AddVertexLabel", rename, v, _).
+Next($AddVertex(vertex), $AddVertex(vertex), $AddVertexLabel(vertex, label)):-
+    ConcreteOperation($AddVertex(vertex)),
+    ConcreteOperation($AddVertexLabel(vertex, label)).

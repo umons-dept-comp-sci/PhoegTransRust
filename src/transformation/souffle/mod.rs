@@ -590,7 +590,6 @@ unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
     if let Some(next_relation) = next_relation {
         let mut trees = HashMap::new();
         let mut iter = souffle_ffi::createTupleIterator(next_relation);
-        println!("{:?}", souffle_ffi::hasNext(&iter));
         while souffle_ffi::hasNext(&iter) {
             let t = souffle_ffi::getNext(&mut iter);
             let root = Operation::from_record_index(extract_signed(t), record, symbol)?;

@@ -6,7 +6,7 @@ use std::{
     io::BufWriter,
 };
 
-use neo4rs::{query, Graph, Node, Path, Relation, Txn};
+use neo4rs::{query, Graph, Node, Path, Query, Relation, Txn};
 
 use crate::{
     graph_transformation::GraphTransformation,
@@ -23,10 +23,11 @@ const PATH_LABEL: &str = "Path";
 const CREATED_PROP: &str = "created";
 const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";
+const SIM_PROP: &str = "similarity";
 pub const OPERATIONS_PROP: &str = "operations";
 
 async fn get_or_create_metanode(
-    key: u64,
+    key: i64,
     is_output: bool,
     is_source: bool,
     sim: Option<f64>,
@@ -48,7 +49,7 @@ async fn get_or_create_metanode(
         format!("remove n:{new}", new = NEW_LABEL)
     };
     let set_sim = sim
-        .map(|s| format!(", n.similarity={}", s))
+        .map(|s| format!(", n.{}={}", SIM_PROP, s))
         .unwrap_or("".to_string());
     let query = query(&format!(
         "
@@ -164,13 +165,13 @@ async fn write_property_graph(
     is_source: bool,
     sim: Option<f64>,
     conn: &Graph,
-) -> u64 {
+) -> i64 {
     let mut hash = DefaultHasher::new();
     g.hash(&mut hash);
-    let key = hash.finish();
+    let key = hash.finish() as i64;
     let mut tx = conn.start_txn().await.unwrap();
     if get_or_create_metanode(key, is_output, is_source, sim, &mut tx).await {
-        let query = query(&create_property_graph_query(g)).param("key", key as i64);
+        let query = query(&create_property_graph_query(g)).param("key", key);
         tx.run(query).await.unwrap();
     }
     tx.commit().await.unwrap();
@@ -207,17 +208,49 @@ pub async fn write_graph_transformation(
     conn.run(query).await.unwrap();
 }
 
-async fn get_source_graphs_async(label: &str, conn: &Graph) -> Vec<PropertyGraph> {
-    let mut graphs = Vec::new();
-    let query = query(&format!(
-        "match (s:{selected})
+pub trait SourceSelector {
+    fn build_query(label: &str) -> Query;
+}
+
+pub struct NaiveSource;
+
+impl SourceSelector for NaiveSource {
+    fn build_query(label: &str) -> Query {
+        query(&format!(
+            "match (s:{selected})
 return
-  collect {{ match (s)-[:{inner}]->(n) return n }} as n,
-  collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e;
+collect {{ match (s)-[:{inner}]->(n) return n }} as n,
+collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e;
 ",
-        selected = label,
-        inner = INNER_LABEL
-    ));
+            selected = label,
+            inner = INNER_LABEL
+        ))
+    }
+}
+
+pub struct GreedySource;
+
+impl SourceSelector for GreedySource {
+    fn build_query(label: &str) -> Query {
+        //FIXME only get the best one
+        query(&format!(
+            "match (s:{selected})
+return
+collect {{ match (s)-[:{inner}]->(n) return n }} as n,
+collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e
+order by s.{similarity} desc
+limit 1;
+",
+            selected = label,
+            inner = INNER_LABEL,
+            similarity = SIM_PROP
+        ))
+    }
+}
+
+async fn get_source_graphs_async<S: SourceSelector>(label: &str, conn: &Graph, _: S) -> Vec<PropertyGraph> {
+    let mut graphs = Vec::new();
+    let query = S::build_query(label);
     let mut res = conn.execute(query).await.unwrap();
     while let Ok(Some(row)) = res.next().await {
         let mut g = PropertyGraph::default();
@@ -273,7 +306,7 @@ return
     graphs
 }
 
-pub fn get_source_graphs(label: &str) -> Vec<PropertyGraph> {
+pub fn get_source_graphs<S: SourceSelector>(label: &str, selector: S) -> Vec<PropertyGraph> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
@@ -282,10 +315,10 @@ pub fn get_source_graphs(label: &str) -> Vec<PropertyGraph> {
     let neograph = runtime
         .block_on(neo4rs::Graph::new("localhost:7687", "", ""))
         .unwrap();
-    runtime.block_on(get_source_graphs_async(label, &neograph))
+    runtime.block_on(get_source_graphs_async(label, &neograph, selector))
 }
 
-async fn add_label_async(label: &str, key: u64, conn: &Graph) {
+async fn add_label_async(label: &str, key: i64, conn: &Graph) {
     let query_str = format!(
         "
 match (n {{{key}:$key}})
@@ -298,7 +331,7 @@ set n:{label};
     conn.run(query).await.unwrap();
 }
 
-pub fn add_label(label: &str, key: u64) {
+pub fn add_label(label: &str, key: i64) {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
