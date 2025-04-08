@@ -24,6 +24,7 @@ const CREATED_PROP: &str = "created";
 const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";
 const SIM_PROP: &str = "similarity";
+const DISTANCE_PROP: &str = "distance";
 pub const OPERATIONS_PROP: &str = "operations";
 
 async fn get_or_create_metanode(
@@ -31,8 +32,9 @@ async fn get_or_create_metanode(
     is_output: bool,
     is_source: bool,
     sim: Option<f64>,
+    distance: Option<i64>,
     conn: &mut Txn,
-) -> bool {
+) -> (bool,Option<i64>) {
     let add_new = if is_output {
         format!(", n:{new}", new = NEW_LABEL)
     } else {
@@ -51,6 +53,9 @@ async fn get_or_create_metanode(
     let set_sim = sim
         .map(|s| format!(", n.{}={}", SIM_PROP, s))
         .unwrap_or("".to_string());
+    let set_sim = sim
+        .map(|s| format!(", n.{}={}", SIM_PROP, s))
+        .unwrap_or("".to_string());
     let query = query(&format!(
         "
 call {{
@@ -58,10 +63,10 @@ with timestamp() as time
 merge (n:{meta} {{{key}:$key}})
 on create
 set n.{created} = time {set_sim} {add_new} {add_source}
-return n,n.{created} = time as created
+return n,n.{created} = time as created, n.{distance} as distance
 }}
 {remove_new}
-return created
+return created, distance
 ",
         add_new = add_new,
         add_source = add_source,
@@ -69,12 +74,15 @@ return created
         remove_new = remove_new,
         key = KEY_PROP,
         created = CREATED_PROP,
-        meta = META_LABEL
+        meta = META_LABEL,
+        distance = DISTANCE_PROP
     ))
     .param("key", key as i64);
     let mut data = conn.execute(query).await.unwrap();
     let row = data.next(conn.handle()).await.unwrap().unwrap();
-    row.get("created").unwrap()
+    let created = row.get("created").unwrap();
+    let distance = row.get("distance").ok();
+    (created, distance)
 }
 
 fn format_data(
@@ -164,18 +172,20 @@ async fn write_property_graph(
     is_output: bool,
     is_source: bool,
     sim: Option<f64>,
+    distance: Option<i64>,
     conn: &Graph,
-) -> i64 {
+) -> (i64, Option<i64>) {
     let mut hash = DefaultHasher::new();
     g.hash(&mut hash);
     let key = hash.finish() as i64;
     let mut tx = conn.start_txn().await.unwrap();
-    if get_or_create_metanode(key, is_output, is_source, sim, &mut tx).await {
+    let (exists, distance) = get_or_create_metanode(key, is_output, is_source, sim,  distance, &mut tx).await;
+    if exists {
         let query = query(&create_property_graph_query(g)).param("key", key);
         tx.run(query).await.unwrap();
     }
     tx.commit().await.unwrap();
-    key
+    (key, distance)
 }
 
 fn build_meta_edge_query() -> String {
@@ -198,9 +208,9 @@ pub async fn write_graph_transformation(
     conn: &Graph,
 ) {
     let first = &gt.init;
-    let first_key = write_property_graph(first, false, is_source, None, conn).await;
+    let (first_key, _) = write_property_graph(first, false, is_source, None, None, conn).await;
     let second = &gt.result;
-    let second_key = write_property_graph(second, true, false, sim, conn).await;
+    let (second_key, _) = write_property_graph(second, true, false, sim, None, conn).await;
     let query = query(&build_meta_edge_query())
         .param("first_key", first_key as i64)
         .param("second_key", second_key as i64)
@@ -248,7 +258,31 @@ limit 1;
     }
 }
 
-async fn get_source_graphs_async<S: SourceSelector>(label: &str, conn: &Graph, _: S) -> Vec<PropertyGraph> {
+pub struct RandomSource;
+
+impl SourceSelector for RandomSource {
+    fn build_query(label: &str) -> Query {
+        //FIXME only get the best one
+        query(&format!(
+            "match (s:{selected})
+with s, rand() as r
+return
+collect {{ match (s)-[:{inner}]->(n) return n }} as n,
+collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e
+order by r
+limit 1;
+",
+            selected = label,
+            inner = INNER_LABEL,
+        ))
+    }
+}
+
+async fn get_source_graphs_async<S: SourceSelector>(
+    label: &str,
+    conn: &Graph,
+    _: S,
+) -> Vec<PropertyGraph> {
     let mut graphs = Vec::new();
     let query = S::build_query(label);
     let mut res = conn.execute(query).await.unwrap();

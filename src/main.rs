@@ -8,7 +8,7 @@ use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
-use transproof::neo4j::{GreedySource, NaiveSource};
+use transproof::neo4j::{GreedySource, NaiveSource, RandomSource};
 use transproof::{compute, errors, neo4j, transformation, utils};
 
 use compute::*;
