@@ -53,8 +53,15 @@ async fn get_or_create_metanode(
     let set_sim = sim
         .map(|s| format!(", n.{}={}", SIM_PROP, s))
         .unwrap_or("".to_string());
-    let set_sim = sim
-        .map(|s| format!(", n.{}={}", SIM_PROP, s))
+    let set_distance = distance
+        .map(|d| format!("
+with case
+    when n.{distance} is null then {d}
+    when n.{distance} > {d} then {d}
+    else n.{distance}
+end as distance, created, n
+set n.{distance} = distance
+", distance=DISTANCE_PROP, d=d))
         .unwrap_or("".to_string());
     let query = query(&format!(
         "
@@ -63,10 +70,11 @@ with timestamp() as time
 merge (n:{meta} {{{key}:$key}})
 on create
 set n.{created} = time {set_sim} {add_new} {add_source}
-return n,n.{created} = time as created, n.{distance} as distance
+return n,n.{created} = time as created
 }}
 {remove_new}
-return created, distance
+{set_distance}
+return created, n.{distance} as distance;
 ",
         add_new = add_new,
         add_source = add_source,
@@ -208,9 +216,11 @@ pub async fn write_graph_transformation(
     conn: &Graph,
 ) {
     let first = &gt.init;
-    let (first_key, _) = write_property_graph(first, false, is_source, None, None, conn).await;
+    let dist = if is_source {Some(0)} else {None};
+    let (first_key, mut dist) = write_property_graph(first, false, is_source, None, dist, conn).await;
     let second = &gt.result;
-    let (second_key, _) = write_property_graph(second, true, false, sim, None, conn).await;
+    dist.iter_mut().for_each(|v| *v+=1);
+    let (second_key, _) = write_property_graph(second, true, false, sim, dist, conn).await;
     let query = query(&build_meta_edge_query())
         .param("first_key", first_key as i64)
         .param("second_key", second_key as i64)
