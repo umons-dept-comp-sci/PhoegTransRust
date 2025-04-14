@@ -34,7 +34,7 @@ async fn get_or_create_metanode(
     sim: Option<f64>,
     distance: Option<i64>,
     conn: &mut Txn,
-) -> (bool,Option<i64>) {
+) -> (bool, Option<i64>) {
     let add_new = if is_output {
         format!(", n:{new}", new = NEW_LABEL)
     } else {
@@ -54,14 +54,20 @@ async fn get_or_create_metanode(
         .map(|s| format!(", n.{}={}", SIM_PROP, s))
         .unwrap_or("".to_string());
     let set_distance = distance
-        .map(|d| format!("
+        .map(|d| {
+            format!(
+                "
 with case
     when n.{distance} is null then {d}
     when n.{distance} > {d} then {d}
     else n.{distance}
 end as distance, created, n
 set n.{distance} = distance
-", distance=DISTANCE_PROP, d=d))
+",
+                distance = DISTANCE_PROP,
+                d = d
+            )
+        })
         .unwrap_or("".to_string());
     let query = query(&format!(
         "
@@ -187,7 +193,8 @@ async fn write_property_graph(
     g.hash(&mut hash);
     let key = hash.finish() as i64;
     let mut tx = conn.start_txn().await.unwrap();
-    let (exists, distance) = get_or_create_metanode(key, is_output, is_source, sim,  distance, &mut tx).await;
+    let (exists, distance) =
+        get_or_create_metanode(key, is_output, is_source, sim, distance, &mut tx).await;
     if exists {
         let query = query(&create_property_graph_query(g)).param("key", key);
         tx.run(query).await.unwrap();
@@ -216,10 +223,11 @@ pub async fn write_graph_transformation(
     conn: &Graph,
 ) {
     let first = &gt.init;
-    let dist = if is_source {Some(0)} else {None};
-    let (first_key, mut dist) = write_property_graph(first, false, is_source, None, dist, conn).await;
+    let dist = if is_source { Some(0) } else { None };
+    let (first_key, mut dist) =
+        write_property_graph(first, false, is_source, None, dist, conn).await;
     let second = &gt.result;
-    dist.iter_mut().for_each(|v| *v+=1);
+    dist.iter_mut().for_each(|v| *v += 1);
     let (second_key, _) = write_property_graph(second, true, false, sim, dist, conn).await;
     let query = query(&build_meta_edge_query())
         .param("first_key", first_key as i64)
@@ -288,13 +296,29 @@ limit 1;
     }
 }
 
-async fn get_source_graphs_async<S: SourceSelector>(
+pub enum SourceSelectorEnum {
+    Random,
+    Greedy,
+    Naive,
+}
+
+impl SourceSelectorEnum {
+    pub fn build_query(&self, label: &str) -> Query {
+        match self {
+            SourceSelectorEnum::Random => RandomSource::build_query(label),
+            SourceSelectorEnum::Greedy => GreedySource::build_query(label),
+            SourceSelectorEnum::Naive => NaiveSource::build_query(label),
+        }
+    }
+}
+
+async fn get_source_graphs_async(
     label: &str,
     conn: &Graph,
-    _: S,
+    source: &SourceSelectorEnum,
 ) -> Vec<PropertyGraph> {
     let mut graphs = Vec::new();
-    let query = S::build_query(label);
+    let query = source.build_query(label);
     let mut res = conn.execute(query).await.unwrap();
     while let Ok(Some(row)) = res.next().await {
         let mut g = PropertyGraph::default();
@@ -350,7 +374,7 @@ async fn get_source_graphs_async<S: SourceSelector>(
     graphs
 }
 
-pub fn get_source_graphs<S: SourceSelector>(label: &str, selector: S) -> Vec<PropertyGraph> {
+pub fn get_source_graphs(label: &str, selector: &SourceSelectorEnum) -> Vec<PropertyGraph> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()

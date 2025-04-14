@@ -26,18 +26,18 @@ type Relation = *mut souffle_ffi::Relation;
 type InputTuple = UniquePtr<souffle_ffi::tuple>;
 pub type OutputTuple = *const souffle_ffi::tuple;
 
-struct RelationNames<'a> {
-    vertex_label: &'a str,
-    vertex: &'a str,
-    vertex_has_label: &'a str,
-    vertex_property: &'a str,
-    edge_label: &'a str,
-    edge: &'a str,
-    edge_has_label: &'a str,
-    edge_property: &'a str,
+pub struct RelationNames<'a> {
+    pub vertex_label: &'a str,
+    pub vertex: &'a str,
+    pub vertex_has_label: &'a str,
+    pub vertex_property: &'a str,
+    pub edge_label: &'a str,
+    pub edge: &'a str,
+    pub edge_has_label: &'a str,
+    pub edge_property: &'a str,
 }
 
-const INPUT_RELATION_NAMES: RelationNames<'static> = RelationNames {
+pub const INPUT_RELATION_NAMES: RelationNames<'static> = RelationNames {
     vertex_label: "VertexLabel",
     vertex: "Vertex",
     vertex_has_label: "VertexHasLabel",
@@ -49,7 +49,7 @@ const INPUT_RELATION_NAMES: RelationNames<'static> = RelationNames {
 };
 
 // same with target relation names
-const TARGET_RELATION_NAMES: RelationNames<'static> = RelationNames {
+pub const TARGET_RELATION_NAMES: RelationNames<'static> = RelationNames {
     vertex_label: "TargetVertexLabel",
     vertex: "TargetVertex",
     vertex_has_label: "TargetVertexHasLabel",

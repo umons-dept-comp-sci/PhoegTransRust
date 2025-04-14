@@ -8,7 +8,7 @@ use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
 use std::sync::Arc;
 use std::thread;
-use transproof::neo4j::{GreedySource, NaiveSource, RandomSource};
+use transproof::neo4j::{GreedySource, NaiveSource, RandomSource, SourceSelector, SourceSelectorEnum};
 use transproof::{compute, errors, neo4j, transformation, utils};
 
 use compute::*;
@@ -22,7 +22,7 @@ use transproof::{
     property_graph::PropertyGraph,
 };
 
-const MAX_TURNS: usize = 3;
+const MAX_TURNS: usize = 5;
 const MIN_IMPROV: f64 = 0.1;
 const TARGET_SIM: f64 = 0.9;
 
@@ -61,6 +61,7 @@ Options:
     -L, --label <label>    Reads graphs from metanodes in Neo4j database having the given label. Incompatible with -i.
     --target <target>      File containing the target schema.
     -p, --prune <prune>    Number of best results to keep. [default: 6]
+    --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random and greedy. [default: naive]
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -79,6 +80,7 @@ struct Args {
     flag_target: Option<String>,
     flag_L: Option<String>,
     flag_p: Option<usize>,
+    flag_strat: String,
 }
 
 fn main() -> Result<(), TransProofError> {
@@ -136,6 +138,12 @@ fn main() -> Result<(), TransProofError> {
     let program = args.arg_program;
     let neo4j = args.flag_neo4j;
     let label = args.flag_L;
+    let strat: SourceSelectorEnum = match &args.flag_strat.as_str() {
+        &"random" => SourceSelectorEnum::Random,
+        &"naive" => SourceSelectorEnum::Naive,
+        &"greedy" => SourceSelectorEnum::Greedy,
+        _ => panic!("Unknown strategy"),
+    };
     NUM_BEST.set(args.flag_p.unwrap()).expect("Failed to set NUM_BEST");
 
     if filename != "-" && label.is_some() {
@@ -225,7 +233,7 @@ fn main() -> Result<(), TransProofError> {
         if label.is_some() || (looping && previous_sim.is_some()) {
             v = neo4j::get_source_graphs(
                 &label.clone().unwrap_or(neo4j::NEW_LABEL.to_string()),
-                NaiveSource,
+                &strat,
             );
         } else {
             let parser = PropertyGraphParser;

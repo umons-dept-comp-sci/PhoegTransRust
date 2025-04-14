@@ -29,3 +29,6 @@ name = "transproof"
 
 [[bin]]
 name = "testnext"
+
+[[bin]]
+name = "serialize_graph"
