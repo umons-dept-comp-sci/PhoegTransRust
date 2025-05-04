@@ -1,14 +1,14 @@
 schemas = {SOI ~ createGraphType ~ (createGraphType)* ~ EOI}
 createGraphType = {^"CREATE GRAPH TYPE" ~ graphType}
-graphType = {typeName ~ graphTypeElements}
-graphTypeElements = {"{" ~ elementTypes? ~ "}"}
+graphType = {typeName? ~ graphTypeElements}
+graphTypeElements = {"{" ~ elementTypes? ~ ","? ~ "}"}
 elementTypes = {elementType ~ ("," ~ elementType)*}
 elementType = {nodeType | edgeType}
 nodeType = {"(" ~ typeName ~ labelPropertySpec ~ ")"}
 edgeType = {endpointType ~ "-" ~ middleType ~ "-" ~ ">" ~ endpointType}
 middleType = {"[" ~ typeName ~ labelPropertySpec ~ "]"}
 endpointType = {"(" ~ ":" ~ typeName ~ ")"}
-labelPropertySpec = {(":" ~ labelSpecSet)? ~ propertySpec?}
+labelPropertySpec = {":"? ~ labelSpecSet? ~ propertySpec?}
 labelSpecSet = {labelSpec ~ ( and ~ labelSpec)*}
 labelSpec = {"(" ~ labelSpecSet ~ ")"
             | "[" ~ labelSpecSet ~ "]"

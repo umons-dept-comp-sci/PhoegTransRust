@@ -348,7 +348,7 @@ impl Display for PropertyGraph {
                 .collect();
             write!(f, "( ")?;
             self.display_label_prop(f, &labels, props)?;
-            writeln!(f, " )")?;
+            writeln!(f, " ),")?;
         }
         for edge in self.graph.edge_indices() {
             let (from, to) = self.graph.edge_endpoints(edge).unwrap();
@@ -362,7 +362,7 @@ impl Display for PropertyGraph {
             write!(f, "  -[")?;
             self.display_label_prop(f, &labels, props)?;
             writeln!(f, " ]->")?;
-            writeln!(f, "(:{})", names.get(&to).unwrap())?;
+            writeln!(f, "(:{}),", names.get(&to).unwrap())?;
         }
         writeln!(f, "}}")
     }

@@ -20,6 +20,7 @@ cxx = { version = "1.0.129", features = ["c++17"] }
 neo4rs = "0.7.1"
 tokio = "1.38.0"
 probminhash = "0.1.11"
+rand = "0.9.1"
 
 [build-dependencies]
 cxx-build = "1.0.119"
@@ -32,3 +33,6 @@ name = "testnext"
 
 [[bin]]
 name = "serialize_graph"
+
+[[bin]]
+name = "add_nodes_random"
