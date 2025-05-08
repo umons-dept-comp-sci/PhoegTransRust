@@ -8,9 +8,10 @@ use log::error;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
 use souffle::{generate_operation_trees, generate_operation_trees_ids};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::fmt::format;
+use std::hash::Hash;
 use std::net::ToSocketAddrs;
 
 use self::souffle::Program;
@@ -61,7 +62,6 @@ impl OperationName {
 }
 
 impl OperationName {
-
     fn symbol<'a>(&'a self) -> &'a str {
         match self {
             OperationName::AddEdge => "AddEdge",
@@ -124,7 +124,7 @@ static OPERATIONS: [OperationName; 16] = [
     OperationName::RemoveVertex,
 ];
 
-lazy_static!{
+lazy_static! {
     static ref OPERATION_ORDER: Vec<OperationName> = {
         let mut names = vec![
             OperationName::AddVertex,
@@ -455,7 +455,6 @@ impl OperationWithIds {
     }
 }
 
-
 pub fn apply_single_transformation(
     program: Program,
     rel_name: &str,
@@ -496,8 +495,8 @@ macro_rules! indentprintln {
 
 fn print_and_test(depth: usize, op: &Operation, g: &mut GraphTransformation) -> bool {
     let r = g.apply(op);
-    let text = if r.is_some() {""} else {" ERROR"};
-    indentprintln!("{:?}{}",depth,op,text);
+    let text = if r.is_some() { "" } else { " ERROR" };
+    indentprintln!("{:?}{}", depth, op, text);
     r.is_some()
 }
 
@@ -507,17 +506,17 @@ fn transform_graph_from_tree(
     mut g: GraphTransformation,
     result: &mut Vec<GraphTransformation>,
     seen: &mut HashSet<Operation>,
-    depth: usize
+    depth: usize,
 ) {
     if seen.contains(current) {
-        indentprintln!("{:?} CYCLE",depth,current);
+        indentprintln!("{:?} CYCLE", depth, current);
         result.push(g);
     } else if !tree.contains_key(current) {
         // seen.insert(*current);
         if print_and_test(depth, current, &mut g) {
             result.push(g);
         }
-        indentprintln!("END OF BRANCH",depth);
+        indentprintln!("END OF BRANCH", depth);
     } else {
         seen.insert(current.clone());
         // println!("{}: added {:?}"," ".repeat(depth),current);
@@ -528,12 +527,12 @@ fn transform_graph_from_tree(
             }
         } else if branches.len() == 1 {
             if print_and_test(depth, current, &mut g) {
-                transform_graph_from_tree(tree, &branches[0], g, result, seen, depth+1);
+                transform_graph_from_tree(tree, &branches[0], g, result, seen, depth + 1);
             }
         } else if print_and_test(depth, current, &mut g) {
             for id in branches {
                 let ng = g.clone();
-                transform_graph_from_tree(tree, id, ng, result, seen, depth+1);
+                transform_graph_from_tree(tree, id, ng, result, seen, depth + 1);
             }
         }
         // println!("{}: removed {:?}"," ".repeat(depth),current);
@@ -548,45 +547,138 @@ fn transform_graph_from_tree_ids(
     result: &mut Vec<GraphTransformation>,
     seen: &mut HashSet<i32>,
     id_map: &HashMap<i32, OperationWithIds>,
-    depth: usize
+    depth: usize,
 ) {
     if id_map.contains_key(current) {
         if seen.contains(current) {
             let op = id_map.get(current).unwrap();
-            println!("CYCLE {}: {}{:?}",current," ".repeat(depth), op);
+            println!("CYCLE {}: {}{:?}", current, " ".repeat(depth), op);
             result.push(g);
         } else if !tree.contains_key(current) {
             // seen.insert(*current);
             let op = id_map.get(current).unwrap();
-            println!("{}: {}{:?}",current," ".repeat(depth), op);
+            println!("{}: {}{:?}", current, " ".repeat(depth), op);
             g.apply_ids(op);
             result.push(g);
         } else {
             seen.insert(*current);
-            println!("{}: added {}"," ".repeat(depth),current);
+            println!("{}: added {}", " ".repeat(depth), current);
             let branches = tree.get(current).unwrap();
             if branches.is_empty() {
                 let op = id_map.get(current).unwrap();
-                println!("{}: {}{:?}",current," ".repeat(depth), op);
+                println!("{}: {}{:?}", current, " ".repeat(depth), op);
                 g.apply_ids(op);
                 result.push(g);
             } else if branches.len() == 1 {
                 let op = id_map.get(current).unwrap();
-                println!("{}: {}{:?}",current," ".repeat(depth), op);
+                println!("{}: {}{:?}", current, " ".repeat(depth), op);
                 g.apply_ids(op);
-                transform_graph_from_tree_ids(tree, &branches[0], g, result, seen, id_map, depth+1);
+                transform_graph_from_tree_ids(
+                    tree,
+                    &branches[0],
+                    g,
+                    result,
+                    seen,
+                    id_map,
+                    depth + 1,
+                );
             } else {
                 let op = id_map.get(current).unwrap();
-                println!("{}: {}{:?}",current," ".repeat(depth), op);
+                println!("{}: {}{:?}", current, " ".repeat(depth), op);
                 g.apply_ids(op);
                 for id in branches {
                     let ng = g.clone();
-                    transform_graph_from_tree_ids(tree, id, ng, result, seen, id_map, depth+1);
+                    transform_graph_from_tree_ids(tree, id, ng, result, seen, id_map, depth + 1);
                 }
             }
-            println!("{}: removed {}"," ".repeat(depth),current);
+            println!("{}: removed {}", " ".repeat(depth), current);
             seen.remove(current);
         }
+    }
+}
+
+pub struct TransformGenerator {
+    trees: HashMap<Operation, HashMap<Operation, Vec<Operation>>>,
+    roots: VecDeque<Operation>,
+    current_tree: Option<HashMap<Operation, Vec<Operation>>>,
+    list: VecDeque<(Operation, GraphTransformation, usize)>,
+    g: GraphTransformation,
+    seen: HashSet<Operation>,
+    current_path: Vec<Operation>,
+}
+
+impl TransformGenerator {
+    pub fn new(
+        trees: HashMap<Operation, HashMap<Operation, Vec<Operation>>>,
+        g: &PropertyGraph,
+    ) -> Self {
+        let roots = trees.keys().cloned().collect();
+        TransformGenerator {
+            trees,
+            roots,
+            current_tree: None,
+            list: VecDeque::new(),
+            g: g.into(),
+            seen: HashSet::new(),
+            current_path: Vec::new(),
+        }
+    }
+
+    fn start_list(&mut self) -> bool {
+        if self.list.is_empty() {
+            if self.roots.is_empty() {
+                false
+            } else {
+                let root = self.roots.pop_front().unwrap();
+                self.current_tree = Some(self.trees.get(&root).unwrap().clone());
+                self.list.push_back((root, self.g.clone(), 0));
+                true
+            }
+        } else {
+            true
+        }
+    }
+}
+
+impl Iterator for TransformGenerator {
+    type Item = GraphTransformation;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.start_list() {
+            let (current, mut g, depth) = self.list.pop_back().unwrap();
+            for op in self.current_path.drain(depth..) {
+                self.seen.remove(&op);
+            }
+            if self.seen.contains(&current) {
+                return Some(self.g.clone());
+            }
+            let current_tree = self.current_tree.as_ref().unwrap();
+            if current_tree.contains_key(&current) {
+                if g.apply(&current).is_some() {
+                    return Some(g);
+                }
+            } else {
+                let branches = current_tree.get(&current).unwrap();
+                if branches.is_empty() {
+                    return Some(g);
+                } else if g.apply(&current).is_some() {
+                    self.seen.insert(current.clone());
+                    self.current_path.push(current.clone());
+                    if branches.len() == 1 {
+                        g.apply(&current).unwrap();
+                        self.list.push_back((branches[0].clone(), g, depth + 1));
+                    } else {
+                        g.apply(&current).unwrap();
+                        for id in branches {
+                            let ng = g.clone();
+                            self.list.push_back((id.clone(), ng, depth + 1));
+                        }
+                    }
+                }
+            }
+
+        }
+        None
     }
 }
 
@@ -595,29 +687,27 @@ pub fn transform_graph(
     transformations: &Vec<&str>,
     g: &PropertyGraph,
     target_graph: &Option<PropertyGraph>,
-) -> Vec<GraphTransformation> {
+) -> Option<TransformGenerator> {
     let transfos: HashSet<&str> = transformations.iter().copied().collect();
-    let mut res = Vec::new();
-    let mut seen = HashSet::new();
-    if let Some(trees) = generate_operation_trees(
-        program,
-        &transfos,
-        g,
-        target_graph
-    ) {
-        for root in trees.keys() {
-            let transfo = GraphTransformation::from(g);
-            transform_graph_from_tree(
-                trees.get(root).unwrap(),
-                root,
-                transfo,
-                &mut res,
-                &mut seen,
-                0
-            )
-        }
+    // let mut res = Vec::new();
+    // let mut seen = HashSet::new();
+    if let Some(trees) = generate_operation_trees(program, &transfos, g, target_graph) {
+        Some(TransformGenerator::new(trees, g))
+        // for root in trees.keys() {
+        //     let transfo = GraphTransformation::from(g);
+        //     transform_graph_from_tree(
+        //         trees.get(root).unwrap(),
+        //         root,
+        //         transfo,
+        //         &mut res,
+        //         &mut seen,
+        //         0,
+        //     )
+        // }
+    } else {
+        None
     }
-    res
+    // res
 }
 
 pub fn transform_graph_ids(
@@ -629,15 +719,8 @@ pub fn transform_graph_ids(
     let transfos: HashSet<&str> = transformations.iter().copied().collect();
     let mut res = Vec::new();
     let mut seen = HashSet::new();
-    if let Some((
-        trees,
-        id_map
-    )) = generate_operation_trees_ids(
-        program,
-        &transfos,
-        g,
-        target_graph
-    ) {
+    if let Some((trees, id_map)) = generate_operation_trees_ids(program, &transfos, g, target_graph)
+    {
         for root in trees.keys() {
             let transfo = GraphTransformation::from(g);
             transform_graph_from_tree_ids(
@@ -647,7 +730,7 @@ pub fn transform_graph_ids(
                 &mut res,
                 &mut seen,
                 &id_map,
-                0
+                0,
             )
         }
     }

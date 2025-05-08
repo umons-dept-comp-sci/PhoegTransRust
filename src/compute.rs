@@ -83,25 +83,27 @@ where
     let num_bests = NUM_BEST.get().unwrap();
     let mut bests = BinaryHeap::with_capacity(num_bests + 1);
     let mut stored = HashSet::with_capacity(num_bests + 1);
-    for h in r {
-        let s = apply_filters(&h, ftrs.clone());
-        if let Ok(_res) = s {
-            let mut hash = DefaultHasher::new();
-            h.result.hash(&mut hash);
-            let key: i64 = hash.finish() as i64;
-            if let Some(target_hash) = target_hash.as_ref() {
-                if !stored.contains(&key) {
-                    stored.insert(key.clone());
-                    let g_hash = property_graph_minhash(&h.result);
-                    let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
-                    bests.push(SimGraph(sim, key, h));
-                    if bests.len() > *num_bests {
-                        let removed = bests.pop().unwrap();
-                        stored.remove(&removed.1);
+    if let Some(generator) = r {
+        for h in generator {
+            let s = apply_filters(&h, ftrs.clone());
+            if let Ok(_res) = s {
+                let mut hash = DefaultHasher::new();
+                h.result.hash(&mut hash);
+                let key: i64 = hash.finish() as i64;
+                if let Some(target_hash) = target_hash.as_ref() {
+                    if !stored.contains(&key) {
+                        stored.insert(key.clone());
+                        let g_hash = property_graph_minhash(&h.result);
+                        let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                        bests.push(SimGraph(sim, key, h));
+                        if bests.len() > *num_bests {
+                            let removed = bests.pop().unwrap();
+                            stored.remove(&removed.1);
+                        }
                     }
+                } else {
+                    t.send(LogInfo::Transfo(h, "".to_string()))?;
                 }
-            } else {
-                t.send(LogInfo::Transfo(h, "".to_string()))?;
             }
         }
     }
