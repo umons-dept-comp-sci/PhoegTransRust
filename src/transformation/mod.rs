@@ -646,14 +646,16 @@ impl Iterator for TransformGenerator {
     fn next(&mut self) -> Option<Self::Item> {
         while self.start_list() {
             let (current, mut g, depth) = self.list.pop_back().unwrap();
+            // dbg!(&current);
+            // dbg!(depth);
             for op in self.current_path.drain(depth..) {
                 self.seen.remove(&op);
             }
             if self.seen.contains(&current) {
-                return Some(self.g.clone());
+                return Some(g);
             }
             let current_tree = self.current_tree.as_ref().unwrap();
-            if current_tree.contains_key(&current) {
+            if !current_tree.contains_key(&current) {
                 if g.apply(&current).is_some() {
                     return Some(g);
                 }
@@ -665,10 +667,8 @@ impl Iterator for TransformGenerator {
                     self.seen.insert(current.clone());
                     self.current_path.push(current.clone());
                     if branches.len() == 1 {
-                        g.apply(&current).unwrap();
                         self.list.push_back((branches[0].clone(), g, depth + 1));
                     } else {
-                        g.apply(&current).unwrap();
                         for id in branches {
                             let ng = g.clone();
                             self.list.push_back((id.clone(), ng, depth + 1));
