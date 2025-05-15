@@ -24,27 +24,41 @@ Options:
     -i, --inc <inc>         Number of random nodes to add [default: 1]
     -n <num>                Number of schemas to output [default: 1]
     -s, --size <size>       Number of characters per random value [default: 10]
+    --identical             Use the same label, properties and values in both schemas
 ";
 
 fn random_string(n: usize) -> String {
     rand::thread_rng().sample_iter(rand::distr::Alphabetic).take(n).map(char::from).collect()
 }
 
-fn add_random_node(source: &mut PropertyGraph,  target: &mut PropertyGraph, size: usize) {
-    let name = random_string(size);
-    let label = random_string(size);
-    let prop1 = random_string(size);
-    let prop2 = random_string(size);
-    let mut props = HashMap::new();
-    props.insert(prop1, "string".to_string());
-    props.insert(prop2, "string".to_string());
-    let props = Properties {
+fn add_random_node(source: &mut PropertyGraph,  target: &mut PropertyGraph, size: usize, identical: bool) {
+    let mut name= "".to_string();
+    let mut label= "".to_string();
+    let mut prop1= "".to_string();
+    let mut prop2= "".to_string();
+    let mut props= HashMap::new();
+    let mut propstruct= Properties{
         name,
-        map: props
+        map: props,
     };
-
+    let mut first = true;
     for pg in [source, target] {
-        let node = pg.graph.add_node(props.clone());
+        if first || !identical {
+            name = random_string(size);
+            label = random_string(size);
+            prop1 = random_string(size);
+            prop2 = random_string(size);
+            props = HashMap::new();
+            props.insert(prop1, "string".to_string());
+            props.insert(prop2, "string".to_string());
+            propstruct = Properties {
+                name,
+                map: props
+            };
+            first = false;
+        }
+
+        let node = pg.graph.add_node(propstruct.clone());
         let labelid = pg.vertex_label.add_label(label.clone());
         pg.vertex_label.add_label_mapping(&node, labelid).unwrap();
     }
@@ -57,6 +71,7 @@ struct Args {
     flag_i: usize,
     flag_n: usize,
     flag_s: usize,
+    flag_identical: bool
 }
 
 fn main() {
@@ -93,7 +108,7 @@ fn main() {
             file.write_all(target.to_string().as_bytes()).unwrap();
         }
         for _ in 0..args.flag_i {
-            add_random_node(&mut source, &mut target, args.flag_s);
+            add_random_node(&mut source, &mut target, args.flag_s, args.flag_identical);
         }
     }
 }
