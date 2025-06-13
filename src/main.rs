@@ -23,8 +23,8 @@ use transproof::{
 };
 
 const MAX_TURNS: usize = 5;
-const MIN_IMPROV: f64 = 0.1;
-const TARGET_SIM: f64 = 0.9;
+const MIN_IMPROV: f64 = 0.01;
+const TARGET_SIM: f64 = 1.0;
 
 // (-f <filter>)...
 // -f <filter>            The filters \
@@ -285,7 +285,7 @@ fn main() -> Result<(), TransProofError> {
     }
     if let Some((best_sim, best_sig)) = previous_sim.zip(previous_sig) {
         add_label(neo4j::TARGET_LABEL, best_sig);
-        info!("Best similarity: {}", best_sim);
+        info!("Final best similarity: {}", best_sim);
         info!("Reached by: {}", best_sig as i64);
     }
     neo4j::compute_paths(

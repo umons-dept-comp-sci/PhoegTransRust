@@ -4,7 +4,13 @@ use std::{
 };
 
 use cxx::{let_cxx_string, CxxString, UniquePtr};
-use petgraph::visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences, NodeRef};
+use petgraph::{
+    csr::DefaultIx,
+    graph::NodeIndex,
+    prelude::StableGraph,
+    visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences, NodeRef},
+    Directed,
+};
 use souffle_ffi::{
     decode_symbol, getRecordTable, getSymbolTable, unpack_record, RecordTable, SymbolTable,
 };
@@ -603,6 +609,75 @@ unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
                 .push(next);
         }
         Some(trees)
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AutomatonNode {
+    pub root: Operation,
+    pub op: Operation,
+    pub group: Option<Vec<Operation>>,
+}
+
+pub struct TransformationAutomaton {
+    pub start: Vec<NodeIndex>,
+    pub node_set: HashMap<Operation, HashMap<Operation, NodeIndex>>,
+    pub graph: StableGraph<AutomatonNode, Option<Operation>, Directed>,
+}
+
+impl TransformationAutomaton {
+    pub fn new() -> Self {
+        TransformationAutomaton {
+            start: Vec::new(),
+            node_set: HashMap::new(),
+            graph: StableGraph::new(),
+        }
+    }
+
+    pub fn add_operation(
+        &mut self,
+        operation: &Operation,
+        root: &Operation,
+        is_root: bool,
+    ) -> NodeIndex {
+        if is_root {
+            self.node_set.insert(operation.clone(), HashMap::new());
+        }
+        let node_subset = self.node_set.get_mut(&root).unwrap();
+        let index = *node_subset
+            .entry(operation.clone())
+            .or_insert(self.graph.add_node(AutomatonNode {
+                root: root.clone(),
+                op: operation.clone(),
+                group: None,
+            }));
+        if is_root {
+            self.start.push(index);
+        }
+        index
+    }
+}
+
+unsafe fn generate_transformation_automaton(program: Program) -> Option<TransformationAutomaton> {
+    let record = getRecordTable(&program);
+    let symbol = getSymbolTable(&program);
+    let next_relation = get_relation(program, "Next");
+    if let Some(next_relation) = next_relation {
+        let mut iter = souffle_ffi::createTupleIterator(next_relation);
+        let mut graph = TransformationAutomaton::new();
+        while souffle_ffi::hasNext(&iter) {
+            let t = souffle_ffi::getNext(&mut iter);
+            let root = Operation::from_record_index(extract_signed(t), record, symbol)?;
+            let prev = Operation::from_record_index(extract_signed(t), record, symbol)?;
+            let next = Operation::from_record_index(extract_signed(t), record, symbol)?;
+            let _ = graph.add_operation(&root, &root, true);
+            let prev_id = graph.add_operation(&prev, &root, false);
+            let next_id = graph.add_operation(&next, &root, false);
+            graph.graph.add_edge(prev_id, next_id, None);
+        }
+        Some(graph)
     } else {
         None
     }

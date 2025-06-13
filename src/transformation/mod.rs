@@ -18,8 +18,8 @@ use self::souffle::Program;
 
 pub mod souffle;
 
-#[derive(Clone, Copy)]
-enum OperationName {
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+pub enum OperationName {
     AddVertexLabel,
     RemoveVertexLabel,
     AddEdgeLabel,
@@ -57,6 +57,29 @@ impl OperationName {
             Self::RenameEdge => "RenameEdge_",
             Self::MoveEdgeTarget => "MoveEdgeTarget_",
             Self::MoveEdgeSource => "MoveEdgeSource_",
+        }
+    }
+}
+
+impl From<Operation> for OperationName {
+    fn from(value: Operation) -> Self {
+        match value {
+            Operation::AddVertexLabel(_, _) => Self::AddVertexLabel,
+            Operation::RemoveVertexLabel(_, _) => Self::RemoveVertexLabel,
+            Operation::AddEdgeLabel(_, _) => Self::AddEdgeLabel,
+            Operation::RemoveEdgeLabel(_, _) => Self::RemoveEdgeLabel,
+            Operation::AddVertex(_) => Self::AddVertex,
+            Operation::RemoveVertex(_) => Self::RemoveVertex,
+            Operation::AddEdge(_, _, _) => Self::AddEdge,
+            Operation::RemoveEdge(_) => Self::RemoveEdge,
+            Operation::AddVertexProperty(_, _, _) => Self::AddVertexProperty,
+            Operation::RemoveVertexProperty(_, _) => Self::RemoveVertexProperty,
+            Operation::AddEdgeProperty(_, _, _) => Self::AddEdgeProperty,
+            Operation::RemoveEdgeProperty(_, _) => Self::RemoveEdgeProperty,
+            Operation::RenameVertex(_, _) => Self::RenameVertex,
+            Operation::RenameEdge(_, _) => Self::RenameEdge,
+            Operation::MoveEdgeTarget(_, _) => Self::MoveEdgeTarget,
+            Operation::MoveEdgeSource(_, _) => Self::MoveEdgeSource,
         }
     }
 }

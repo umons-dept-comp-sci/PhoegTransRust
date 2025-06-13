@@ -2,7 +2,7 @@ use crate::errors::*;
 use crate::graph_transformation::GraphTransformation;
 use crate::neo4j::write_graph_transformation;
 use crate::property_graph::PropertyGraph;
-use crate::similarity::property_graph_minhash;
+use crate::similarity::{jaccard_index, property_graph_minhash};
 use crate::transformation::*;
 use crate::utils::plural;
 use crate::constants::NUM_BEST;
@@ -78,7 +78,7 @@ pub fn handle_graph<F>(
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
-    let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g));
+    // let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g)).unwrap();
     let r = transform_graph(program, trsf, &g, target_graph);
     let num_bests = NUM_BEST.get().unwrap();
     let mut bests = BinaryHeap::with_capacity(num_bests + 1);
@@ -90,11 +90,12 @@ where
                 let mut hash = DefaultHasher::new();
                 h.result.hash(&mut hash);
                 let key: i64 = hash.finish() as i64;
-                if let Some(target_hash) = target_hash.as_ref() {
+                if let Some(target) = target_graph.as_ref() {
                     if !stored.contains(&key) {
-                        stored.insert(key.clone());
-                        let g_hash = property_graph_minhash(&h.result);
-                        let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                        stored.insert(key);
+                        // let g_hash = property_graph_minhash(&h.result);
+                        // let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                        let sim = jaccard_index(&h.result, target);
                         bests.push(SimGraph(sim, key, h));
                         if bests.len() > *num_bests {
                             let removed = bests.pop().unwrap();

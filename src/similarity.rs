@@ -83,6 +83,29 @@ pub fn property_graph_minhash(g: &PropertyGraph) -> Vec<String> {
     minhash.get_signature().to_vec()
 }
 
+pub fn jaccard_index(g1: &PropertyGraph, g2: &PropertyGraph) -> f64 {
+    let mut isolated = property_graph_features(g1)
+        .into_iter()
+        .fold(HashMap::new(), |mut h, s| {
+            h.entry(s).and_modify(|v| *v+=1).or_insert(1);
+            h
+    });
+    let mut common = HashMap::new();
+    property_graph_features(g2).into_iter().for_each(|s| {
+        if common.contains_key(&s) {
+            common.entry(s).and_modify(|v| *v+=1);
+        } else if isolated.contains_key(&s) {
+            let num = isolated.remove(&s).unwrap();
+            common.insert(s, num);
+        } else {
+            isolated.insert(s, 1);
+        }
+    });
+    let common_num = common.values().sum::<u64>() as f64;
+    let isolated_num = isolated.values().sum::<u64>() as f64;
+    common_num / (isolated_num + common_num)
+}
+
 #[cfg(test)]
 mod sim_test {
     use probminhash::jaccard::compute_probminhash_jaccard;
@@ -114,13 +137,13 @@ mod sim_test {
         let text = "CREATE GRAPH TYPE fraudGraphType {
 ( personType : Person { name STRING , birthday DATE }) ,
 ( customerType : Person & Customer { name STRING , since DATE }) ,
-( suspiciousType : Suspicious { reason STRING }) ,
+( suspiciousTyp : Suspicious { reason STRING }) ,
 ( : customerType )
 -[ friendType : Knows & Likes {time INT} ] ->
 ( : customerType ),
 ( : customerType )
 -[ aliasType {frequency INT} ] ->
-( : suspiciousType )
+( : suspiciousTyp )
 }";
         let parser = PropertyGraphParser;
         let results = parser.convert_text(text);
@@ -130,5 +153,6 @@ mod sim_test {
         println!("{:?}", hash2);
 
         println!("dist: {}", compute_probminhash_jaccard(&hash1, &hash2));
+        println!("dist2: {}", jaccard_index(g1, g2));
     }
 }
