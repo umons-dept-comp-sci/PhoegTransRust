@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
 };
 
@@ -11,15 +11,13 @@ use petgraph::{
     Undirected,
 };
 use transproof::{
-    parsing::PropertyGraphParser,
-    property_graph::PropertyGraph,
-    transformation::{
+    graph_transformation::GraphTransformation, parsing::PropertyGraphParser, property_graph::PropertyGraph, transformation::{
         souffle::{
             create_program_instance, generate_operation_trees, AutomatonNode,
             TransformationAutomaton,
         },
         transform_graph_ids, Operation, OperationName, TransformGenerator,
-    },
+    }
 };
 
 fn get_schema() -> PropertyGraph {
@@ -37,14 +35,17 @@ create graph type persondata {
 
 fn get_graph() -> TransformationAutomaton {
     let add_node = Operation::AddVertex("vert".to_string());
+    let add_label = Operation::AddVertexLabel("vert".to_string(), "label".to_string());
     let operations = (1..=5).map(|i| {
         Operation::AddVertexProperty("vert".to_string(), format!("prop{}", i), "type".to_string())
     }).collect::<Vec<_>>();
     let mut graph = TransformationAutomaton::new();
     let add_node_n = graph.add_operation(&add_node, &add_node, true);
+    let add_label_n = graph.add_operation(&add_label, &add_node, true);
     let nodes = operations.iter().map(|op| graph.add_operation(op, &add_node, false)).collect::<Vec<_>>();
     for (i, node) in nodes.iter().enumerate() {
         graph.graph.add_edge(add_node_n, *node, None);
+        graph.graph.add_edge(*node, add_label_n, None);
         for (j, node2) in nodes.iter().enumerate().filter(|(j,_)| i != *j) {
             graph.graph.add_edge(*node, *node2, None);
         }
@@ -55,33 +56,16 @@ fn get_graph() -> TransformationAutomaton {
 fn get_transfos() -> HashMap<Operation, HashMap<Operation, Vec<Operation>>> {
     let mut res = HashMap::new();
     let mut tree = HashMap::new();
-    tree.insert(
-        Operation::AddVertex("vert".to_string()),
-        vec![
-            Operation::AddVertexLabel("vert".to_string(), "label".to_string()),
-            Operation::AddVertexProperty(
-                "vert".to_string(),
-                "prop".to_string(),
-                "type".to_string(),
-            ),
-        ],
-    );
-    tree.insert(
-        Operation::AddVertexLabel("vert".to_string(), "label".to_string()),
-        vec![
-            Operation::AddVertexLabel("vert".to_string(), "label".to_string()),
-            Operation::AddVertexProperty(
-                "vert".to_string(),
-                "prop".to_string(),
-                "type".to_string(),
-            ),
-        ],
-    );
-    tree.insert(
-        Operation::AddVertexProperty("vert".to_string(), "prop".to_string(), "type".to_string()),
-        vec![Operation::AddVertex("othervert".to_string())],
-    );
-    res.insert(Operation::AddVertex("vert".to_string()), tree);
+    let add_node = Operation::AddVertex("vert".to_string());
+    let operations = (1..=5).map(|i| {
+        Operation::AddVertexProperty("vert".to_string(), format!("prop{}", i), "type".to_string())
+    }).collect::<Vec<_>>();
+    tree.insert(add_node.clone(), operations.clone());
+    for op in operations.iter() {
+        let new_list = operations.iter().filter(|o| o != &op).cloned().collect::<Vec<_>>();
+        tree.insert(op.clone(), new_list);
+    }
+    res.insert(add_node, tree);
     res
 }
 
@@ -156,22 +140,22 @@ fn contract_graph(g: &mut TransformationAutomaton) {
     }
 }
 
-struct SubsetGenerator<'a, T>
-where T: Clone
+struct SubsetGenerator
 {
-    list: &'a Vec<T>,
-    current: Vec<T>,
+    list: Vec<Operation>,
+    base: GraphTransformation,
+    current: Vec<GraphTransformation>,
     indices: Vec<usize>,
     index: usize
 }
 
-impl<'a, T> SubsetGenerator<'a, T>
-where T: Clone
+impl SubsetGenerator
 {
-    fn new(list: &'a Vec<T>) -> Self {
+    fn new(list: Vec<Operation>, base: GraphTransformation) -> Self {
         let mut indices = vec![0; list.len()];
         SubsetGenerator {
             list,
+            base,
             current: Vec::new(),
             indices,
             index: 0,
@@ -179,17 +163,21 @@ where T: Clone
     }
 }
 
-impl <'a, T> Iterator for SubsetGenerator<'a, T>
-where T:Clone
+impl Iterator for SubsetGenerator
 {
-    type Item = Vec<T>;
+    type Item = GraphTransformation;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.list.is_empty() {
             None
         } else if self.current.is_empty() {
-            self.current.push(self.list[0].clone());
-            Some(self.current.clone())
+            let mut graph = self.base.clone();
+            if self.base.clone().apply(&self.list[0]).is_some() {
+                self.current.push(graph.clone());
+                Some(graph)
+            } else {
+                None
+            }
         } else {
             if self.indices[0] == self.list.len() - 1 {
                 None
@@ -198,39 +186,158 @@ where T:Clone
                     self.current.pop();
                     self.index -= 1;
                     self.indices[self.index] += 1;
-                    self.current[self.index] = self.list[self.indices[self.index]].clone();
-                    Some(self.current.clone())
+                    let mut graph = if self.index == 0 {self.base.clone()} else {self.current[self.index-1].clone()};
+                    if graph.apply(&self.list[self.indices[self.index]]).is_some() {
+                        self.current[self.index] = graph.clone();
+                        Some(graph)
+                    } else {
+                        None
+                    }
                 } else {
                     self.indices[self.index + 1] = self.indices[self.index] + 1;
                     self.index += 1;
-                    self.current.push(self.list[self.indices[self.index]].clone());
-                    Some(self.current.clone())
+                    let mut graph = self.current[self.index-1].clone();
+                    if graph.apply(&self.list[self.indices[self.index]]).is_some() {
+                        self.current.push(graph.clone());
+                        Some(graph)
+                    } else {
+                        None
+                    }
                 }
             }
         }
     }
 }
 
-fn main() {
-    let schema = get_schema();
-    let mut g = get_graph();
-    contract_graph(&mut g);
-    for arc in g.graph.edge_references() {
-        let src = arc.source();
-        let dst = arc.target();
-        println!(
-            "{:?} -> {:?}: {:?} ({:?} -> {:?})",
-            g.graph[src].op,
-            g.graph[dst].op,
-            arc.weight(),
-            g.graph[src].group,
-            g.graph[dst].group
-        );
+
+pub struct TransformGeneratorGraph {
+    automaton: TransformationAutomaton,
+    starts: VecDeque<NodeIndex>,
+    list: VecDeque<(NodeIndex, GraphTransformation, usize)>,
+    g: GraphTransformation,
+    seen: HashSet<NodeIndex>,
+    current_path: Vec<NodeIndex>,
+    generator: Option<(NodeIndex, usize, SubsetGenerator)>
+}
+
+impl TransformGeneratorGraph {
+    pub fn new(
+        automaton: TransformationAutomaton,
+        g: &PropertyGraph,
+    ) -> Self {
+        let starts = automaton.start.clone().into();
+        TransformGeneratorGraph {
+            automaton,
+            starts,
+            list: VecDeque::new(),
+            g: g.into(),
+            seen: HashSet::new(),
+            current_path: Vec::new(),
+            generator: None
+        }
     }
 
-    let list = vec![1, 2, 3, 4, 5];
-    for v in SubsetGenerator::new(&list) {
-        println!("{:?}", v);
+    fn start_list(&mut self) -> bool {
+        if self.list.is_empty() {
+            if self.starts.is_empty() {
+                false
+            } else {
+                let start = self.starts.pop_front().unwrap();
+                self.list.push_back((start, self.g.clone(), 0));
+                true
+            }
+        } else {
+            true
+        }
+    }
+}
+
+impl Iterator for TransformGeneratorGraph {
+    type Item = GraphTransformation;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.generator.is_some() || self.start_list() {
+            if let Some((node, depth, generator)) = self.generator.as_mut() {
+                if let Some(g) = generator.next() {
+                    let mut neighbors = self.automaton.graph.neighbors(*node).detach();
+                    while let Some(neighbor) = neighbors.next_node(&self.automaton.graph) {
+                        let ng = g.clone();
+                        self.list.push_back((neighbor, ng, *depth + 1));
+                    }
+                    return Some(g);
+                } else {
+                    self.generator = None;
+                }
+            } else {
+                let (current, mut g, depth) = self.list.pop_back().unwrap();
+                // dbg!(&current);
+                // dbg!(depth);
+                for node in self.current_path.drain(depth..) {
+                    self.seen.remove(&node);
+                }
+                if self.seen.contains(&current) {
+                    return Some(g);
+                }
+                if let Some(group) = self.automaton.graph[current].group.clone() {
+                    self.seen.insert(current.clone());
+                    self.current_path.push(current.clone());
+                    let generator = SubsetGenerator::new(group, g);
+                    self.generator = Some((current, depth, generator));
+                } else if g.apply(&self.automaton.graph[current].op).is_some() {
+                    self.seen.insert(current.clone());
+                    self.current_path.push(current.clone());
+                    let mut neighbor_count = 0;
+                    let mut neighbors = self.automaton.graph.neighbors(current).detach();
+                    while let Some(neighbor) = neighbors.next_node(&self.automaton.graph) {
+                        neighbor_count += 1;
+                        let ng = g.clone();
+                        self.list.push_back((neighbor, ng, depth + 1));
+                    }
+                    if neighbor_count == 0 {
+                        return Some(g);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+fn main(){
+    let schema = get_schema();
+    // for schema in TransformGenerator::new(get_transfos(), &schema) {
+    //     println!("{}", schema);
+    // }
+    let mut g = get_graph();
+    contract_graph(&mut g);
+    for schema in TransformGeneratorGraph::new(g, &schema) {
+        println!("{}", schema);
+    }
+}
+
+fn main2() {
+    let schema = get_schema();
+    // let mut g = get_graph();
+    // contract_graph(&mut g);
+    // for arc in g.graph.edge_references() {
+    //     let src = arc.source();
+    //     let dst = arc.target();
+    //     println!(
+    //         "{:?} -> {:?}: {:?} ({:?} -> {:?})",
+    //         g.graph[src].op,
+    //         g.graph[dst].op,
+    //         arc.weight(),
+    //         g.graph[src].group,
+    //         g.graph[dst].group
+    //     );
+    // }
+
+    let list = (1..=5).map(|i|
+        Operation::AddVertexProperty("personType".to_string(), format!("prop{}", i), "type".to_string())
+    ).collect::<Vec<_>>();
+    let pg: GraphTransformation = (&schema).into();
+    for v in SubsetGenerator::new(list, pg) {
+        println!("{}", v);
     }
     // let iterator = TransformGenerator::new(get_transfos(), &schema);
     // for gt in iterator {
