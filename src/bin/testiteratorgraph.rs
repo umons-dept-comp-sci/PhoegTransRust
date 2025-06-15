@@ -16,7 +16,7 @@ use transproof::{
             create_program_instance, generate_operation_trees, AutomatonNode,
             TransformationAutomaton,
         },
-        transform_graph_ids, Operation, OperationName, TransformGenerator,
+        Operation, OperationName, TransformGenerator,
     }
 };
 

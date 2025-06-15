@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    ptr::{null, null_mut},
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use cxx::{let_cxx_string, CxxString, UniquePtr};
 use petgraph::{
@@ -22,7 +19,7 @@ use log::{debug, error, info};
 use self::souffle_ffi::getNumber;
 
 use super::{
-    name_from_order, Operation, OperationName, OperationWithIds, OPERATIONS, OPERATION_ORDER,
+    name_from_order, Operation, OperationName, OPERATIONS,
 };
 
 mod souffle_ffi;
@@ -389,137 +386,6 @@ impl Operation {
     }
 }
 
-impl OperationName {
-    fn construct(&self, t: OutputTuple) -> OperationWithIds {
-        unsafe {
-            match self {
-                Self::AddVertexLabel => {
-                    let vertex = extract_number(t);
-                    let label = extract_number(t);
-                    let labelname = extract_text(t);
-                    OperationWithIds::AddVertexLabel(vertex, label, labelname)
-                }
-                Self::RemoveVertexLabel => {
-                    let vertex = extract_number(t);
-                    let label = extract_number(t);
-                    OperationWithIds::RemoveVertexLabel(vertex, label)
-                }
-                Self::AddEdgeLabel => {
-                    let edge = extract_number(t);
-                    let label = extract_number(t);
-                    let labelname = extract_text(t);
-                    OperationWithIds::AddEdgeLabel(edge, label, labelname)
-                }
-                Self::RemoveEdgeLabel => {
-                    let edge = extract_number(t);
-                    let label = extract_number(t);
-                    OperationWithIds::RemoveEdgeLabel(edge, label)
-                }
-                Self::AddVertex => {
-                    let vertex = extract_number(t);
-                    OperationWithIds::AddVertex(vertex)
-                }
-                Self::RemoveVertex => {
-                    let vertex = extract_number(t);
-                    OperationWithIds::RemoveVertex(vertex)
-                }
-                Self::AddEdge => {
-                    let edge = extract_number(t);
-                    let from = extract_number(t);
-                    let to = extract_number(t);
-                    OperationWithIds::AddEdge(edge, from, to)
-                }
-                Self::RemoveEdge => {
-                    let edge = extract_number(t);
-                    OperationWithIds::RemoveEdge(edge)
-                }
-                Self::AddVertexProperty => {
-                    let vertex = extract_number(t);
-                    let name = extract_text(t);
-                    let value = extract_text(t);
-                    OperationWithIds::AddVertexProperty(vertex, name, value)
-                }
-                Self::RemoveVertexProperty => {
-                    let vertex = extract_number(t);
-                    let name = extract_text(t);
-                    OperationWithIds::RemoveVertexProperty(vertex, name)
-                }
-                Self::AddEdgeProperty => {
-                    let edge = extract_number(t);
-                    let name = extract_text(t);
-                    let value = extract_text(t);
-                    OperationWithIds::AddEdgeProperty(edge, name, value)
-                }
-                Self::RemoveEdgeProperty => {
-                    let edge = extract_number(t);
-                    let name = extract_text(t);
-                    OperationWithIds::RemoveEdgeProperty(edge, name)
-                }
-                Self::RenameVertex => {
-                    let vertex = extract_number(t);
-                    let name = extract_text(t);
-                    OperationWithIds::RenameVertex(vertex, name)
-                }
-                Self::RenameEdge => {
-                    let edge = extract_number(t);
-                    let name = extract_text(t);
-                    OperationWithIds::RenameEdge(edge, name)
-                }
-                Self::MoveEdgeTarget => {
-                    let edge = extract_number(t);
-                    let target = extract_number(t);
-                    OperationWithIds::MoveEdgeTarget(edge, target)
-                }
-                Self::MoveEdgeSource => {
-                    let edge = extract_number(t);
-                    let source = extract_number(t);
-                    OperationWithIds::MoveEdgeSource(edge, source)
-                }
-            }
-        }
-    }
-}
-
-#[deprecated]
-pub fn generate_operations(
-    program: Program,
-    relation_name: &str,
-    g: &PropertyGraph,
-    target_graph: &Option<PropertyGraph>,
-) -> HashMap<i32, Vec<OperationWithIds>> {
-    encode_input_graph(program, g);
-    if let Some(target) = target_graph {
-        encode_target_graph(program, target);
-    }
-    unsafe {
-        souffle_ffi::runProgram(program);
-        let out_relation =
-            get_relation(program, relation_name).expect("No relation for the transformations.");
-        let mut iter = souffle_ffi::createTupleIterator(out_relation);
-        let mut ids = vec![];
-        while souffle_ffi::hasNext(&iter) {
-            let id = extract_signed(souffle_ffi::getNext(&mut iter));
-            ids.push(id);
-        }
-        let mut operations: HashMap<i32, Vec<OperationWithIds>> = HashMap::new();
-        for operation in OPERATIONS.iter() {
-            if let Some(out_relation) = get_relation(program, operation.get_relation()) {
-                let mut iter = souffle_ffi::createTupleIterator(out_relation);
-                while souffle_ffi::hasNext(&iter) {
-                    let t = souffle_ffi::getNext(&mut iter);
-                    let name = extract_text(t);
-                    if name == relation_name {
-                        let id = extract_signed(t);
-                        let op = operation.construct(t);
-                        operations.entry(id).or_default().push(op);
-                    }
-                }
-            }
-        }
-        souffle_ffi::purgeProgram(program);
-        operations
-    }
-}
 
 pub type TransfoTrees = HashMap<Operation, HashMap<Operation, Vec<Operation>>>;
 
@@ -541,54 +407,7 @@ pub fn generate_operation_trees(
     }
 }
 
-pub type TransfoTreesIds = HashMap<i32, HashMap<i32, Vec<i32>>>;
 
-pub fn generate_operation_trees_ids(
-    program: Program,
-    transformations: &HashSet<&str>,
-    g: &PropertyGraph,
-    target_graph: &Option<PropertyGraph>,
-) -> Option<(TransfoTreesIds, HashMap<i32, OperationWithIds>)> {
-    encode_input_graph(program, g);
-    if let Some(target) = target_graph {
-        encode_target_graph(program, target);
-    }
-    unsafe {
-        souffle_ffi::runProgram(program);
-        if let Some((trees, ids)) = generate_trees_ids(program) {
-            let id_map = extract_ids(program, transformations, ids);
-            souffle_ffi::purgeProgram(program);
-            return Some((trees, id_map));
-        }
-        souffle_ffi::purgeProgram(program);
-    }
-    None
-}
-
-unsafe fn extract_ids(
-    program: Program,
-    transformations: &HashSet<&str>,
-    ids: HashSet<i32>,
-) -> HashMap<i32, OperationWithIds> {
-    let mut ops: HashMap<i32, OperationWithIds> = HashMap::new();
-    for operation in OPERATIONS.iter() {
-        if let Some(out_relation) = get_relation(program, operation.get_relation()) {
-            let mut iter = souffle_ffi::createTupleIterator(out_relation);
-            while souffle_ffi::hasNext(&iter) {
-                let t = souffle_ffi::getNext(&mut iter);
-                let name = extract_text(t);
-                if transformations.contains(name.as_str()) {
-                    let id = extract_signed(t);
-                    if ids.contains(&id) {
-                        let op = operation.construct(t);
-                        ops.insert(id, op);
-                    }
-                }
-            }
-        }
-    }
-    ops
-}
 unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
     let record = getRecordTable(&program);
     let symbol = getSymbolTable(&program);
@@ -683,30 +502,3 @@ unsafe fn generate_transformation_automaton(program: Program) -> Option<Transfor
     }
 }
 
-unsafe fn generate_trees_ids(program: Program) -> Option<(TransfoTreesIds, HashSet<i32>)> {
-    let next_relation = get_relation(program, "Next_");
-    if let Some(next_relation) = next_relation {
-        let mut trees = HashMap::new();
-        let mut ids = HashSet::new();
-        let mut iter = souffle_ffi::createTupleIterator(next_relation);
-        while souffle_ffi::hasNext(&iter) {
-            let t = souffle_ffi::getNext(&mut iter);
-            let root = extract_signed(t);
-            let prev = extract_signed(t);
-            let next = extract_signed(t);
-            println!("Next_({},{},{}).", root, prev, next);
-            trees
-                .entry(root)
-                .or_insert_with(HashMap::new)
-                .entry(prev)
-                .or_insert_with(Vec::new)
-                .push(next);
-            ids.insert(root);
-            ids.insert(prev);
-            ids.insert(next);
-        }
-        Some((trees, ids))
-    } else {
-        None
-    }
-}

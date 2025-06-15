@@ -28,11 +28,11 @@ cxx-build = "1.0.119"
 [lib]
 name = "transproof"
 
-[[bin]]
-name = "testnext"
+# [[bin]]
+# name = "testnext"
 
-[[bin]]
-name = "testiterator"
+# [[bin]]
+# name = "testiterator"
 
 [[bin]]
 name = "testiteratorgraph"
