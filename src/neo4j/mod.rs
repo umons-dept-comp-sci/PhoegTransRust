@@ -8,6 +8,7 @@ use std::{
 
 use neo4rs::{query, Graph, Node, Path, Query, Relation, Txn};
 
+use crate::constants::{AUTOMATON_TIME, GEN_TIME, NEO4J_TIME, SIM_TIME, SOUFFLE_TIME, TOTAL_TIME};
 use crate::{
     graph_transformation::GraphTransformation,
     property_graph::{Properties, PropertyGraph},
@@ -276,6 +277,30 @@ limit 1;
     }
 }
 
+pub struct WeightedDistanceSource;
+
+impl SourceSelector for WeightedDistanceSource {
+    fn build_query(label: &str) -> Query {
+        //FIXME only get the best one
+        query(&format!(
+            "match (n:{meta})
+with max(n.{distance}) as maxDist
+match (s:{selected})
+return
+collect {{ match (s)-[:{inner}]->(n) return n }} as n,
+collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e
+order by (s.{distance} / maxDist) + (1 - s.{similarity})
+limit 1;
+",
+            selected = label,
+            inner = INNER_LABEL,
+            similarity = SIM_PROP,
+            meta = META_LABEL,
+            distance = DISTANCE_PROP
+        ))
+    }
+}
+
 pub struct RandomSource;
 
 impl SourceSelector for RandomSource {
@@ -299,6 +324,7 @@ limit 1;
 pub enum SourceSelectorEnum {
     Random,
     Greedy,
+    WeightedDistance,
     Naive,
 }
 
@@ -307,6 +333,7 @@ impl SourceSelectorEnum {
         match self {
             SourceSelectorEnum::Random => RandomSource::build_query(label),
             SourceSelectorEnum::Greedy => GreedySource::build_query(label),
+            SourceSelectorEnum::WeightedDistance => WeightedDistanceSource::build_query(label),
             SourceSelectorEnum::Naive => NaiveSource::build_query(label),
         }
     }
@@ -471,6 +498,42 @@ pub fn compute_paths(source_label: &str, target_label: &str, operations_name: &s
         operations_name,
         &neograph,
     ))
+}
+
+async fn save_timings_async(neograph: &Graph) {
+    let query = query(
+        "
+CREATE (n:TIMINGS {
+    total_time: $total_time,
+    souffle_time: $souffle_time,
+    neo4j_time: $neo4j_time,
+    sim_time: $sim_time,
+    gen_time: $gen_time,
+    automaton_time: $automaton_time
+});",
+    )
+    .param("total_time", TOTAL_TIME.lock().unwrap().as_secs_f64())
+    .param("souffle_time", SOUFFLE_TIME.lock().unwrap().as_secs_f64())
+    .param("neo4j_time", NEO4J_TIME.lock().unwrap().as_secs_f64())
+    .param("sim_time", SIM_TIME.lock().unwrap().as_secs_f64())
+    .param("gen_time", GEN_TIME.lock().unwrap().as_secs_f64())
+    .param(
+        "automaton_time",
+        AUTOMATON_TIME.lock().unwrap().as_secs_f64(),
+    );
+    neograph.run(query).await.unwrap();
+}
+
+pub fn save_timings() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let neograph = runtime
+        .block_on(neo4rs::Graph::new("localhost:7687", "", ""))
+        .unwrap();
+    runtime.block_on(save_timings_async(&neograph));
 }
 
 #[cfg(test)]

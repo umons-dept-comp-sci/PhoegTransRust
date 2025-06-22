@@ -1,4 +1,5 @@
 use docopt::Docopt;
+use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use neo4j::add_label;
 use serde::Deserialize;
@@ -6,16 +7,20 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use transproof::neo4j::{GreedySource, NaiveSource, RandomSource, SourceSelector, SourceSelectorEnum};
+use std::time::Duration;
+use std::time::Instant;
+use transproof::neo4j::{
+    save_timings, GreedySource, NaiveSource, RandomSource, SourceSelector, SourceSelectorEnum,
+};
 use transproof::{compute, errors, neo4j, transformation, utils};
 
 use compute::*;
 use errors::*;
 use transformation::*;
+use transproof::constants::{NUM_BEST, TOTAL_TIME};
 use utils::*;
-use transproof::constants::NUM_BEST;
 
 use transproof::{
     graph_transformation::GraphTransformation, parsing::PropertyGraphParser,
@@ -61,7 +66,7 @@ Options:
     -L, --label <label>    Reads graphs from metanodes in Neo4j database having the given label. Incompatible with -i.
     --target <target>      File containing the target schema.
     -p, --prune <prune>    Number of best results to keep. [default: 6]
-    --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random and greedy. [default: naive]
+    --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random, weighted_distance and greedy. [default: greedy]
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -84,6 +89,7 @@ struct Args {
 }
 
 fn main() -> Result<(), TransProofError> {
+    let start = Instant::now();
     // Parsing args
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
@@ -141,10 +147,13 @@ fn main() -> Result<(), TransProofError> {
     let strat: SourceSelectorEnum = match &args.flag_strat.as_str() {
         &"random" => SourceSelectorEnum::Random,
         &"naive" => SourceSelectorEnum::Naive,
+        &"weighted_distance" => SourceSelectorEnum::WeightedDistance,
         &"greedy" => SourceSelectorEnum::Greedy,
         _ => panic!("Unknown strategy"),
     };
-    NUM_BEST.set(args.flag_p.unwrap()).expect("Failed to set NUM_BEST");
+    NUM_BEST
+        .set(args.flag_p.unwrap())
+        .expect("Failed to set NUM_BEST");
 
     if filename != "-" && label.is_some() {
         error!("Option -L is not compatible with -i.");
@@ -226,7 +235,7 @@ fn main() -> Result<(), TransProofError> {
                 Some((sim, sig)) => {
                     info!("Best similarity so far: {}", sim);
                     info!("Reached by: {}", sig as i64);
-                },
+                }
                 None => info!("First run"),
             }
         }
@@ -293,5 +302,11 @@ fn main() -> Result<(), TransProofError> {
         neo4j::TARGET_LABEL,
         neo4j::OPERATIONS_PROP,
     );
+    {
+        let mut time = TOTAL_TIME.lock().unwrap();
+        *time += start.elapsed();
+        // *TOTAL_TIME = *TOTAL_TIME + start.elapsed();
+    }
+    save_timings();
     Ok(())
 }

@@ -1,11 +1,12 @@
 use crate::property_graph::PropertyGraph;
 use crate::transformation::souffle::extract_number;
+use crate::transformation_automaton::TransformGeneratorGraph;
 use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
 use lazy_static::lazy_static;
 use log::error;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::NodeIndexable;
-use souffle::{generate_operation_trees};
+use souffle::{generate_operation_automaton, generate_operation_trees};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::fmt::format;
@@ -198,7 +199,6 @@ pub enum Operation {
     MoveEdgeSource(String, String),
 }
 
-
 pub struct TransformGenerator {
     trees: HashMap<Operation, HashMap<Operation, Vec<Operation>>>,
     roots: VecDeque<Operation>,
@@ -278,13 +278,13 @@ impl Iterator for TransformGenerator {
                     }
                 }
             }
-
         }
         None
     }
 }
 
-pub fn transform_graph(
+#[deprecated]
+pub fn transform_graph_old(
     program: Program,
     transformations: &Vec<&str>,
     g: &PropertyGraph,
@@ -298,3 +298,16 @@ pub fn transform_graph(
     }
 }
 
+pub fn transform_graph(
+    program: Program,
+    transformations: &Vec<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Option<TransformGeneratorGraph> {
+    let transfos: HashSet<&str> = transformations.iter().copied().collect();
+    if let Some(graph) = generate_operation_automaton(program, &transfos, g, target_graph) {
+        Some(TransformGeneratorGraph::new(graph, g))
+    } else {
+        None
+    }
+}

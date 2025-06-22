@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    time::Instant,
+};
 
 use cxx::{let_cxx_string, CxxString, UniquePtr};
 use petgraph::{
@@ -12,15 +15,18 @@ use souffle_ffi::{
     decode_symbol, getRecordTable, getSymbolTable, unpack_record, RecordTable, SymbolTable,
 };
 
-use crate::{graph_transformation::GraphTransformation, property_graph::PropertyGraph};
+use crate::{
+    constants::{AUTOMATON_TIME, SOUFFLE_TIME},
+    graph_transformation::GraphTransformation,
+    property_graph::PropertyGraph,
+    transformation_automaton::{contract_graph, TransformationAutomaton},
+};
 
 use log::{debug, error, info};
 
 use self::souffle_ffi::getNumber;
 
-use super::{
-    name_from_order, Operation, OperationName, OPERATIONS,
-};
+use super::{name_from_order, Operation, OperationName, OPERATIONS};
 
 mod souffle_ffi;
 
@@ -386,7 +392,6 @@ impl Operation {
     }
 }
 
-
 pub type TransfoTrees = HashMap<Operation, HashMap<Operation, Vec<Operation>>>;
 
 pub fn generate_operation_trees(
@@ -406,7 +411,6 @@ pub fn generate_operation_trees(
         trees
     }
 }
-
 
 unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
     let record = getRecordTable(&program);
@@ -433,53 +437,7 @@ unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AutomatonNode {
-    pub root: Operation,
-    pub op: Operation,
-    pub group: Option<Vec<Operation>>,
-}
-
-pub struct TransformationAutomaton {
-    pub start: Vec<NodeIndex>,
-    pub node_set: HashMap<Operation, HashMap<Operation, NodeIndex>>,
-    pub graph: StableGraph<AutomatonNode, Option<Operation>, Directed>,
-}
-
-impl TransformationAutomaton {
-    pub fn new() -> Self {
-        TransformationAutomaton {
-            start: Vec::new(),
-            node_set: HashMap::new(),
-            graph: StableGraph::new(),
-        }
-    }
-
-    pub fn add_operation(
-        &mut self,
-        operation: &Operation,
-        root: &Operation,
-        is_root: bool,
-    ) -> NodeIndex {
-        if is_root {
-            self.node_set.insert(operation.clone(), HashMap::new());
-        }
-        let node_subset = self.node_set.get_mut(&root).unwrap();
-        let index = *node_subset
-            .entry(operation.clone())
-            .or_insert(self.graph.add_node(AutomatonNode {
-                root: root.clone(),
-                op: operation.clone(),
-                group: None,
-            }));
-        if is_root {
-            self.start.push(index);
-        }
-        index
-    }
-}
-
-unsafe fn generate_transformation_automaton(program: Program) -> Option<TransformationAutomaton> {
+unsafe fn generate_graph(program: Program) -> Option<TransformationAutomaton> {
     let record = getRecordTable(&program);
     let symbol = getSymbolTable(&program);
     let next_relation = get_relation(program, "Next");
@@ -496,9 +454,35 @@ unsafe fn generate_transformation_automaton(program: Program) -> Option<Transfor
             let next_id = graph.add_operation(&next, &root, false);
             graph.graph.add_edge(prev_id, next_id, None);
         }
+        contract_graph(&mut graph);
         Some(graph)
     } else {
         None
     }
 }
 
+pub fn generate_operation_automaton(
+    program: Program,
+    transformations: &HashSet<&str>,
+    g: &PropertyGraph,
+    target_graph: &Option<PropertyGraph>,
+) -> Option<TransformationAutomaton> {
+    encode_input_graph(program, g);
+    if let Some(target) = target_graph {
+        encode_target_graph(program, target);
+    }
+    unsafe {
+        let mut start = Instant::now();
+        souffle_ffi::runProgram(program);
+        {
+            *SOUFFLE_TIME.lock().unwrap() += start.elapsed();
+        }
+        start = Instant::now();
+        let graph = generate_graph(program);
+        {
+            *AUTOMATON_TIME.lock().unwrap() += start.elapsed();
+        }
+        souffle_ffi::purgeProgram(program);
+        graph
+    }
+}

@@ -5,7 +5,7 @@ use crate::property_graph::PropertyGraph;
 use crate::similarity::{jaccard_index, property_graph_minhash};
 use crate::transformation::*;
 use crate::utils::plural;
-use crate::constants::NUM_BEST;
+use crate::constants::{GEN_TIME, NEO4J_TIME, NUM_BEST, SIM_TIME};
 use log::info;
 use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
@@ -83,8 +83,12 @@ where
     let num_bests = NUM_BEST.get().unwrap();
     let mut bests = BinaryHeap::with_capacity(num_bests + 1);
     let mut stored = HashSet::with_capacity(num_bests + 1);
+    let mut start = Instant::now();
     if let Some(generator) = r {
         for h in generator {
+            {
+                *GEN_TIME.lock().unwrap() += start.elapsed();
+            }
             let s = apply_filters(&h, ftrs.clone());
             if let Ok(_res) = s {
                 let mut hash = DefaultHasher::new();
@@ -95,7 +99,11 @@ where
                         stored.insert(key);
                         // let g_hash = property_graph_minhash(&h.result);
                         // let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
+                        start = Instant::now();
                         let sim = jaccard_index(&h.result, target);
+                        {
+                            *SIM_TIME.lock().unwrap() += start.elapsed();
+                        }
                         bests.push(SimGraph(sim, key, h));
                         if bests.len() > *num_bests {
                             let removed = bests.pop().unwrap();
@@ -106,6 +114,7 @@ where
                     t.send(LogInfo::Transfo(h, "".to_string()))?;
                 }
             }
+            start = Instant::now();
         }
     }
     for transfo in bests {
@@ -190,6 +199,9 @@ pub fn output_neo4j(
                     &neograph,
                 ));
                 neo4j_time += neotime.elapsed();
+                {
+                    *NEO4J_TIME.lock().unwrap() += neotime.elapsed();
+                }
                 if best_sim.map(|bsim| bsim < t.0).unwrap_or(true) {
                     info!("New best: {}", t.0);
                     info!("Best key: {}", t.1);
