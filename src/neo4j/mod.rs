@@ -8,7 +8,7 @@ use std::{
 
 use neo4rs::{query, Graph, Node, Path, Query, Relation, Txn};
 
-use crate::constants::{AUTOMATON_TIME, GEN_TIME, NEO4J_TIME, SIM_TIME, SOUFFLE_TIME, TOTAL_TIME};
+use crate::constants::{AUTOMATON_TIME, GEN_TIME, NEO4J_TIME, SIM_TIME, SOUFFLE_TIME, TOTAL_TIME, PATH_WEIGHT};
 use crate::{
     graph_transformation::GraphTransformation,
     property_graph::{Properties, PropertyGraph},
@@ -281,6 +281,7 @@ pub struct WeightedDistanceSource;
 
 impl SourceSelector for WeightedDistanceSource {
     fn build_query(label: &str) -> Query {
+        let weight = PATH_WEIGHT.get().unwrap();
         //FIXME only get the best one
         query(&format!(
             "match (n:{meta})
@@ -289,14 +290,15 @@ match (s:{selected})
 return
 collect {{ match (s)-[:{inner}]->(n) return n }} as n,
 collect {{ match (s)-[:{inner}]->()-[e:!{inner}]->() return e }} as e
-order by (s.{distance} / maxDist) + (1 - s.{similarity})
+order by {weight}*(s.{distance} / maxDist) + (1 - {weight})*(1 - s.{similarity})
 limit 1;
 ",
             selected = label,
             inner = INNER_LABEL,
             similarity = SIM_PROP,
             meta = META_LABEL,
-            distance = DISTANCE_PROP
+            distance = DISTANCE_PROP,
+            weight = weight
         ))
     }
 }

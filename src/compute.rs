@@ -5,7 +5,7 @@ use crate::property_graph::PropertyGraph;
 use crate::similarity::{jaccard_index, property_graph_minhash};
 use crate::transformation::*;
 use crate::utils::plural;
-use crate::constants::{GEN_TIME, NEO4J_TIME, NUM_BEST, SIM_TIME};
+use crate::constants::{GEN_TIME, NEO4J_TIME, NUM_BEST, SIM_TIME, MINHASH};
 use log::info;
 use probminhash::jaccard::compute_probminhash_jaccard;
 use rayon::prelude::*;
@@ -78,12 +78,15 @@ pub fn handle_graph<F>(
 where
     F: Fn(&GraphTransformation) -> Result<String, ()>,
 {
+    let mut start = Instant::now();
     // let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g)).unwrap();
+    // {
+    //     *SIM_TIME.lock().unwrap() += start.elapsed();
+    // }
     let r = transform_graph(program, trsf, &g, target_graph);
     let num_bests = NUM_BEST.get().unwrap();
     let mut bests = BinaryHeap::with_capacity(num_bests + 1);
     let mut stored = HashSet::with_capacity(num_bests + 1);
-    let mut start = Instant::now();
     if let Some(generator) = r {
         for h in generator {
             {
@@ -97,10 +100,14 @@ where
                 if let Some(target) = target_graph.as_ref() {
                     if !stored.contains(&key) {
                         stored.insert(key);
-                        // let g_hash = property_graph_minhash(&h.result);
-                        // let sim = compute_probminhash_jaccard(&target_hash, &g_hash);
                         start = Instant::now();
-                        let sim = jaccard_index(&h.result, target);
+                        let sim = if *MINHASH.get().unwrap() {
+                            let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g)).unwrap();
+                            let g_hash = property_graph_minhash(&h.result);
+                            compute_probminhash_jaccard(&target_hash, &g_hash)
+                        } else {
+                            jaccard_index(&h.result, target)
+                        };
                         {
                             *SIM_TIME.lock().unwrap() += start.elapsed();
                         }

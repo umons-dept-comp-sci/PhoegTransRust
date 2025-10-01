@@ -42,3 +42,6 @@ name = "serialize_graph"
 
 [[bin]]
 name = "add_nodes_random"
+
+[[bin]]
+name = "similarity"

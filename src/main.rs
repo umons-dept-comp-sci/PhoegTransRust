@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use neo4j::add_label;
 use serde::Deserialize;
 use std::convert::TryInto;
+use std::f32::MIN;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, sync_channel};
@@ -19,7 +20,7 @@ use transproof::{compute, errors, neo4j, transformation, utils};
 use compute::*;
 use errors::*;
 use transformation::*;
-use transproof::constants::{NUM_BEST, TOTAL_TIME};
+use transproof::constants::{NUM_BEST, TOTAL_TIME, MINHASH, PATH_WEIGHT};
 use utils::*;
 
 use transproof::{
@@ -67,6 +68,8 @@ Options:
     --target <target>      File containing the target schema.
     -p, --prune <prune>    Number of best results to keep. [default: 6]
     --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random, weighted_distance and greedy. [default: greedy]
+    -w, --weight <weight>  Weight to give to the distance in the weighted distance strategy. Must be between 0 and 1. [default: 0.5]
+    --minshash             Use minhash similarity instead of default jaccard index.
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -83,9 +86,11 @@ struct Args {
     flag_append: bool,
     flag_neo4j: bool,
     flag_target: Option<String>,
-    flag_L: Option<String>,
+    flag_l: Option<String>,
     flag_p: Option<usize>,
     flag_strat: String,
+    flag_w: f64,
+    flag_minshash: bool,
 }
 
 fn main() -> Result<(), TransProofError> {
@@ -143,7 +148,7 @@ fn main() -> Result<(), TransProofError> {
     let append = args.flag_append;
     let program = args.arg_program;
     let neo4j = args.flag_neo4j;
-    let label = args.flag_L;
+    let label = args.flag_l;
     let strat: SourceSelectorEnum = match &args.flag_strat.as_str() {
         &"random" => SourceSelectorEnum::Random,
         &"naive" => SourceSelectorEnum::Naive,
@@ -154,6 +159,17 @@ fn main() -> Result<(), TransProofError> {
     NUM_BEST
         .set(args.flag_p.unwrap())
         .expect("Failed to set NUM_BEST");
+
+    MINHASH
+        .set(args.flag_minshash)
+        .expect("Failed to set MINHASH");
+
+    if args.flag_w < 0.0 || args.flag_w > 1.0 {
+        error!("Weight must be in the range [0,1].");
+        panic!("Weight must be in the range [0,1].");
+    }
+
+    PATH_WEIGHT.set(args.flag_w).expect("Failed to set PATH_WEIGHT");  
 
     if filename != "-" && label.is_some() {
         error!("Option -L is not compatible with -i.");
