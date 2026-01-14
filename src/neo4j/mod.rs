@@ -105,8 +105,9 @@ fn format_data(
     labels: &Vec<&String>,
     props: &Properties,
     edge: bool,
+    varname: String
 ) {
-    write!(out, "{}", props.name);
+    write!(out, "{}", varname);
     if edge && labels.is_empty() {
         write!(out, ":{}", INTERNAL_LABEL);
     } else {
@@ -139,24 +140,24 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
     );
     let mut names = HashMap::new();
     let mut start = true;
-    for vertex in g.graph.node_indices() {
+    for (num, vertex) in g.graph.node_indices().enumerate() {
         if start {
             start = false;
         } else {
             write!(out, ", ");
         }
         let props = g.graph.node_weight(vertex).unwrap();
-        names.insert(vertex, props.name.clone());
+        names.insert(vertex, format!("node_{}", num));
         let labels = g
             .vertex_label
             .element_labels(&vertex)
             .map(|id| g.vertex_label.get_label(*id).unwrap())
             .collect();
         write!(out, "( ");
-        format_data(&mut out, &labels, props, false);
+        format_data(&mut out, &labels, props, false, format!("node_{}", num));
         write!(out, " )");
     }
-    for edge in g.graph.edge_indices() {
+    for (num, edge) in g.graph.edge_indices().enumerate() {
         let (from, to) = g.graph.edge_endpoints(edge).unwrap();
         let props = g.graph.edge_weight(edge).unwrap();
         let labels = g
@@ -166,7 +167,7 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
             .collect();
         write!(out, ", ({})", names.get(&from).unwrap());
         write!(out, "  -[");
-        format_data(&mut out, &labels, props, true);
+        format_data(&mut out, &labels, props, true, format!("edge_{}", num));
         write!(out, " ]->");
         write!(out, "({})", names.get(&to).unwrap());
     }
@@ -179,7 +180,8 @@ fn create_property_graph_query(g: &PropertyGraph) -> String {
         );
     }
     write!(out, ";");
-    String::from_utf8(out.into_inner().unwrap()).unwrap()
+    let res = String::from_utf8(out.into_inner().unwrap()).unwrap();
+    res
 }
 
 async fn write_property_graph(
