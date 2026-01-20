@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    time::Instant,
+    collections::{HashMap, HashSet, VecDeque}, hash::{DefaultHasher, Hash, Hasher}, time::Instant
 };
 
 use cxx::{let_cxx_string, CxxString, UniquePtr};
@@ -440,25 +439,34 @@ unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
 unsafe fn generate_graph(program: Program) -> Option<TransformationAutomaton> {
     let record = getRecordTable(&program);
     let symbol = getSymbolTable(&program);
-    let next_relation = get_relation(program, "Next");
-    if let Some(next_relation) = next_relation {
-        let mut iter = souffle_ffi::createTupleIterator(next_relation);
-        let mut graph = TransformationAutomaton::new();
-        while souffle_ffi::hasNext(&iter) {
-            let t = souffle_ffi::getNext(&mut iter);
-            let root = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            let prev = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            let next = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            let _ = graph.add_operation(&root, &root, true);
-            let prev_id = graph.add_operation(&prev, &root, false);
-            let next_id = graph.add_operation(&next, &root, false);
-            graph.graph.add_edge(prev_id, next_id, None);
+    let mut graph_res = None;
+    let mut hasher = DefaultHasher::new();
+    for (next_relation_name, has_id) in [("Next", false), ("NextId", true)] {
+        let next_relation = get_relation(program, next_relation_name);
+        if let Some(next_relation) = next_relation {
+            let mut iter = souffle_ffi::createTupleIterator(next_relation);
+            let mut graph: TransformationAutomaton = graph_res.unwrap_or_default();
+            while souffle_ffi::hasNext(&iter) {
+                let t = souffle_ffi::getNext(&mut iter);
+                let mut t_id = None;
+                if has_id {
+                    let name = extract_text(t);
+                    name.hash(&mut hasher);
+                    t_id = Some(hasher.finish() as usize);
+                }
+                let root = Operation::from_record_index(extract_signed(t), record, symbol)?;
+                let prev = Operation::from_record_index(extract_signed(t), record, symbol)?;
+                let next = Operation::from_record_index(extract_signed(t), record, symbol)?;
+                let _ = graph.add_operation(&root, &root, t_id, true);
+                let prev_id = graph.add_operation(&prev, &root, t_id, false);
+                let next_id = graph.add_operation(&next, &root, t_id, false);
+                graph.graph.add_edge(prev_id, next_id, None);
+            }
+            contract_graph(&mut graph);
+            graph_res = Some(graph);
         }
-        contract_graph(&mut graph);
-        Some(graph)
-    } else {
-        None
     }
+    graph_res
 }
 
 pub fn generate_operation_automaton(

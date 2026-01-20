@@ -18,13 +18,14 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct AutomatonNode {
     pub root: Operation,
+    pub t_id: Option<usize>,
     pub op: Operation,
     pub group: Option<Vec<Operation>>,
 }
 
 pub struct TransformationAutomaton {
     pub start: Vec<NodeIndex>,
-    pub node_set: HashMap<Operation, HashMap<Operation, NodeIndex>>,
+    pub node_set: HashMap<(Operation, Option<usize>), HashMap<Operation, NodeIndex>>,
     pub graph: StableGraph<AutomatonNode, Option<Operation>, Directed>,
 }
 
@@ -41,16 +42,17 @@ impl TransformationAutomaton {
         &mut self,
         operation: &Operation,
         root: &Operation,
+        t_id: Option<usize>,
         is_root: bool,
     ) -> NodeIndex {
         let mut added = false;
         let node_subset = if is_root {
-            self.node_set.entry(root.clone()).or_insert_with(|| {
+            self.node_set.entry((root.clone(), t_id)).or_insert_with(|| {
                 added = true;
                 HashMap::new()
             })
         } else {
-            self.node_set.get_mut(root).unwrap()
+            self.node_set.get_mut(&(root.clone(), t_id)).unwrap()
         };
         let index = *node_subset
             .entry(operation.clone())
@@ -58,6 +60,7 @@ impl TransformationAutomaton {
                 // println!("insert {:?}", operation);
                 self.graph.add_node(AutomatonNode {
                     root: root.clone(),
+                    t_id,
                     op: operation.clone(),
                     group: None,
                 })
@@ -78,15 +81,15 @@ impl Default for TransformationAutomaton {
 fn to_undirected(
     g: &TransformationAutomaton,
 ) -> (
-    StableGraph<(Operation, Operation), (), Undirected>,
+    StableGraph<(Operation, Option<usize>, Operation), (), Undirected>,
     HashMap<NodeIndex, NodeIndex>,
 ) {
-    let mut new_graph: StableGraph<(Operation, Operation), (), Undirected> = StableGraph::default();
+    let mut new_graph: StableGraph<(Operation, Option<usize>, Operation), (), Undirected> = StableGraph::default();
     let mut node_map: HashMap<NodeIndex, NodeIndex> = HashMap::new();
     for node in g.graph.node_indices() {
         node_map.insert(
             node,
-            new_graph.add_node((g.graph[node].root.clone(), g.graph[node].op.clone())),
+            new_graph.add_node((g.graph[node].root.clone(), g.graph[node].t_id, g.graph[node].op.clone())),
         );
     }
     for e in g.graph.edge_references() {
@@ -109,9 +112,10 @@ pub fn contract_graph(g: &mut TransformationAutomaton) {
     let mut handled = HashSet::new();
     for set in cliques.into_iter().filter(|s| s.len() > 1) {
         let node1 = set.iter().next().unwrap();
-        let (root, op) = &undirected[*node1];
+        let (root, t_id, op) = &undirected[*node1];
         let mut new_node = AutomatonNode {
             root: root.clone(),
+            t_id: *t_id,
             op: op.clone(),
             group: None,
         };
@@ -119,9 +123,9 @@ pub fn contract_graph(g: &mut TransformationAutomaton) {
         let mut group = vec![];
         for und_v in set.iter() {
             if !handled.contains(und_v) {
-                let (root, op) = &undirected[*und_v];
+                let (root, t_id, op) = &undirected[*und_v];
                 group.push(op.clone());
-                let v = g.node_set.get(&root).unwrap().get(&op).unwrap();
+                let v = g.node_set.get(&(root.clone(), *t_id)).unwrap().get(&op).unwrap();
                 let neighbors_incoming = g.graph.neighbors_directed(*v, Incoming).detach();
                 let neighbors_outgoing = g.graph.neighbors_directed(*v, Outgoing).detach();
                 for (mut neighbor, incoming) in
@@ -139,7 +143,7 @@ pub fn contract_graph(g: &mut TransformationAutomaton) {
                 }
                 g.graph.remove_node(*v);
                 g.node_set
-                    .get_mut(&root)
+                    .get_mut(&(root.clone(), *t_id))
                     .unwrap()
                     .insert(op.clone(), new_node_ref);
                 handled.insert(*und_v);

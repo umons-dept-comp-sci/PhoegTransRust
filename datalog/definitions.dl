@@ -92,6 +92,10 @@
 .input Next
 .output Next
 
+.decl NextId(id: symbol, root: Operation, previous: Operation, next: Operation)
+.input NextId
+.output NextId
+
 .type Operation = AddVertexLabel{vertex: symbol, label: symbol}
                 | RemoveVertexLabel{vertex: symbol, label: symbol}
                 | AddEdgeLabel{edge: symbol, label: symbol}
