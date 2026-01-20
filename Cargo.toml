@@ -45,3 +45,6 @@ name = "add_nodes_random"
 
 [[bin]]
 name = "similarity"
+
+[[bin]]
+name = "datalog2pgschema"

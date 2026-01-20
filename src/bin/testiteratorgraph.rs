@@ -50,11 +50,11 @@ fn get_graph() -> TransformationAutomaton {
         })
         .collect::<Vec<_>>();
     let mut graph = TransformationAutomaton::new();
-    let add_node_n = graph.add_operation(&add_node, &add_node, true);
-    let add_label_n = graph.add_operation(&add_label, &add_node, true);
+    let add_node_n = graph.add_operation(&add_node, &add_node, None, true);
+    let add_label_n = graph.add_operation(&add_label, &add_node, None, true);
     let nodes = operations
         .iter()
-        .map(|op| graph.add_operation(op, &add_node, false))
+        .map(|op| graph.add_operation(op, &add_node, None, false))
         .collect::<Vec<_>>();
     for (i, node) in nodes.iter().enumerate() {
         graph.graph.add_edge(add_node_n, *node, None);
