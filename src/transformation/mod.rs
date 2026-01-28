@@ -1,17 +1,10 @@
 use crate::property_graph::PropertyGraph;
-use crate::transformation::souffle::extract_number;
 use crate::transformation_automaton::TransformGeneratorGraph;
-use crate::{graph_transformation::GraphTransformation, transformation::souffle::OutputTuple};
+use crate::{graph_transformation::GraphTransformation};
 use lazy_static::lazy_static;
-use log::error;
-use petgraph::stable_graph::{EdgeIndex, NodeIndex};
-use petgraph::visit::NodeIndexable;
-use souffle::{generate_operation_automaton, generate_operation_trees};
+use souffle::{generate_operation_automaton};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::convert::TryFrom;
-use std::fmt::format;
 use std::hash::Hash;
-use std::net::ToSocketAddrs;
 
 use self::souffle::Program;
 
@@ -279,21 +272,6 @@ impl Iterator for TransformGenerator {
                 }
             }
         }
-        None
-    }
-}
-
-#[deprecated]
-pub fn transform_graph_old(
-    program: Program,
-    transformations: &Vec<&str>,
-    g: &PropertyGraph,
-    target_graph: &Option<PropertyGraph>,
-) -> Option<TransformGenerator> {
-    let transfos: HashSet<&str> = transformations.iter().copied().collect();
-    if let Some(trees) = generate_operation_trees(program, &transfos, g, target_graph) {
-        Some(TransformGenerator::new(trees, g))
-    } else {
         None
     }
 }

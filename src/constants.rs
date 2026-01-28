@@ -7,6 +7,7 @@ use std::time::Duration;
 pub static NUM_BEST: OnceLock<usize> = OnceLock::new();
 pub static MINHASH: OnceLock<bool> = OnceLock::new();
 pub static PATH_WEIGHT: OnceLock<f64> = OnceLock::new();
+pub static IDEMPOTENCE: OnceLock<bool> = OnceLock::new();
 
 lazy_static! {
     pub static ref TOTAL_TIME: Arc<Mutex<Duration>> = Arc::new(Mutex::new(Duration::default()));

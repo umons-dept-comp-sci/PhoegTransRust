@@ -391,51 +391,6 @@ impl Operation {
     }
 }
 
-pub type TransfoTrees = HashMap<Operation, HashMap<Operation, Vec<Operation>>>;
-
-pub fn generate_operation_trees(
-    program: Program,
-    transformations: &HashSet<&str>,
-    g: &PropertyGraph,
-    target_graph: &Option<PropertyGraph>,
-) -> Option<TransfoTrees> {
-    encode_input_graph(program, g);
-    if let Some(target) = target_graph {
-        encode_target_graph(program, target);
-    }
-    unsafe {
-        souffle_ffi::runProgram(program);
-        let trees = generate_trees(program);
-        souffle_ffi::purgeProgram(program);
-        trees
-    }
-}
-
-unsafe fn generate_trees(program: Program) -> Option<TransfoTrees> {
-    let record = getRecordTable(&program);
-    let symbol = getSymbolTable(&program);
-    let next_relation = get_relation(program, "Next");
-    if let Some(next_relation) = next_relation {
-        let mut trees = HashMap::new();
-        let mut iter = souffle_ffi::createTupleIterator(next_relation);
-        while souffle_ffi::hasNext(&iter) {
-            let t = souffle_ffi::getNext(&mut iter);
-            let root = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            let prev = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            let next = Operation::from_record_index(extract_signed(t), record, symbol)?;
-            trees
-                .entry(root)
-                .or_insert_with(HashMap::new)
-                .entry(prev)
-                .or_insert_with(Vec::new)
-                .push(next);
-        }
-        Some(trees)
-    } else {
-        None
-    }
-}
-
 unsafe fn generate_graph(program: Program) -> Option<TransformationAutomaton> {
     let record = getRecordTable(&program);
     let symbol = getSymbolTable(&program);

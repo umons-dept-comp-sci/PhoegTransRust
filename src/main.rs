@@ -20,7 +20,7 @@ use transproof::{compute, errors, neo4j, transformation, utils};
 use compute::*;
 use errors::*;
 use transformation::*;
-use transproof::constants::{NUM_BEST, TOTAL_TIME, MINHASH, PATH_WEIGHT};
+use transproof::constants::{IDEMPOTENCE, MINHASH, NUM_BEST, PATH_WEIGHT, TOTAL_TIME};
 use utils::*;
 
 use transproof::{
@@ -70,6 +70,7 @@ Options:
     --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random, weighted_distance and greedy. [default: greedy]
     -w, --weight <weight>  Weight to give to the distance in the weighted distance strategy. Must be between 0 and 1. [default: 0.5]
     --minshash             Use minhash similarity instead of default jaccard index.
+    --idempotent           Operations are idempotent
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -91,6 +92,7 @@ struct Args {
     flag_strat: String,
     flag_w: f64,
     flag_minshash: bool,
+    flag_idempotent: bool,
 }
 
 fn main() -> Result<(), TransProofError> {
@@ -175,6 +177,8 @@ fn main() -> Result<(), TransProofError> {
         error!("Option -L is not compatible with -i.");
         panic!("Option -L is not compatible with -i.");
     }
+
+    IDEMPOTENCE.set(args.flag_idempotent).expect("Failed to set IDEMPOTENCE");
     let target_graph: Option<PropertyGraph> = args
         .flag_target
         .map(|fname| -> Result<PropertyGraph, std::io::Error> {

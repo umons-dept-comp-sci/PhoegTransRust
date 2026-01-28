@@ -7,8 +7,7 @@ use petgraph::{
 };
 
 use crate::{
-    property_graph::{Properties, PropertyGraph},
-    transformation::{Operation},
+    constants::IDEMPOTENCE, property_graph::{Properties, PropertyGraph}, transformation::Operation
 };
 
 #[derive(Debug)]
@@ -106,6 +105,7 @@ impl GraphTransformation {
     }
 
     pub fn apply(&mut self, op: &Operation) -> Option<()> {
+        let idempotent = IDEMPOTENCE.get().unwrap();
         match op {
             Operation::AddVertexLabel(v, l) => {
                 let vertex = self.node_ids.get(v)?;
@@ -123,12 +123,19 @@ impl GraphTransformation {
                     .ok()?;
             }
             Operation::RemoveVertexLabel(v, l) => {
-                let vertex = self.node_ids.get(v)?;
-                let label = self.label_node_ids.get(l)?;
-                self.result
-                    .vertex_label
-                    .remove_label_mapping(vertex, *label)
-                    .ok()?;
+                let vertex = self.node_ids.get(v);
+                let label = self.label_node_ids.get(l);
+                if let (Some(vertex), Some(label)) = (vertex, label) {
+                    let res = self.result
+                        .vertex_label
+                        .remove_label_mapping(vertex, *label)
+                        .ok();
+                    if !idempotent && res.is_none() {
+                        return None;
+                    }
+                } else if !idempotent && (vertex.is_none() || label.is_none()) {
+                    return None;
+                }
             }
             Operation::AddEdgeLabel(e, l) => {
                 let edge = self.edge_ids.get(e)?;
@@ -143,17 +150,26 @@ impl GraphTransformation {
                 self.result.edge_label.add_label_mapping(edge, label).ok()?;
             }
             Operation::RemoveEdgeLabel(e, l) => {
-                let edge = self.edge_ids.get(e)?;
-                let label = self.label_edge_ids.get(l)?;
-                self.result
-                    .edge_label
-                    .remove_label_mapping(edge, *label)
-                    .ok()?;
+                let edge = self.edge_ids.get(e);
+                let label = self.label_edge_ids.get(l);
+                if let (Some(edge), Some(label)) = (edge, label) {
+                    let res = self.result
+                        .edge_label
+                        .remove_label_mapping(edge, *label)
+                        .ok();
+                    if !idempotent && res.is_none() {
+                        return None;
+                    }
+                } else if !idempotent && (edge.is_none() || label.is_none()) {
+                    return None;
+                }
             }
             Operation::AddVertex(v) => {
                 if self.node_ids.contains_key(v) {
                     // error!("Node {v} already exists.");
-                    return None;
+                    if !idempotent {
+                        return None;
+                    }
                 } else {
                     let real_index = self.result.graph.add_node(Properties {
                         name: v.clone(),
@@ -163,15 +179,20 @@ impl GraphTransformation {
                 }
             }
             Operation::RemoveVertex(v) => {
-                let index = self.node_ids.get(v)?;
-                self.result.vertex_label.remove_element(index);
-                self.result.graph.remove_node(*index);
-                self.node_ids.remove(v);
+                if let Some(index) = self.node_ids.get(v) {
+                    self.result.vertex_label.remove_element(index);
+                    self.result.graph.remove_node(*index);
+                    self.node_ids.remove(v);
+                } else if !idempotent {
+                    return None;
+                }
             }
             Operation::AddEdge(e, start, end) => {
                 if self.edge_ids.contains_key(e) {
                     // error!("Edge {e} already exists.");
-                    return None;
+                    if !idempotent {
+                        return None;
+                    }
                 } else {
                     let n1 = self.node_ids.get(start)?;
                     let n2 = self.node_ids.get(end)?;
@@ -187,10 +208,13 @@ impl GraphTransformation {
                 }
             }
             Operation::RemoveEdge(e) => {
-                let index = self.edge_ids.get(e)?;
-                self.result.edge_label.remove_element(index);
-                self.result.graph.remove_edge(*index);
-                self.edge_ids.remove(e);
+                if let Some(index) =  self.edge_ids.get(e) {
+                    self.result.edge_label.remove_element(index);
+                    self.result.graph.remove_edge(*index);
+                    self.edge_ids.remove(e);
+                } else if !idempotent {
+                    return None;
+                }
             }
             Operation::AddVertexProperty(v, name, value) => {
                 let prop = self.result.graph.node_weight_mut(*self.node_ids.get(v)?)?;
@@ -209,12 +233,20 @@ impl GraphTransformation {
                 prop.map.remove(name);
             }
             Operation::RenameVertex(v, name) => {
-                let prop = self.result.graph.node_weight_mut(*self.node_ids.get(v)?)?;
-                prop.name.clone_from(name);
+                if let Some(id) = self.node_ids.get(v) {
+                    let prop = self.result.graph.node_weight_mut(*id)?;
+                    prop.name.clone_from(name);
+                } else if !idempotent {
+                    return None;
+                }
             }
             Operation::RenameEdge(e, name) => {
-                let prop = self.result.graph.edge_weight_mut(*self.edge_ids.get(e)?)?;
-                prop.name.clone_from(name);
+                if let Some(id) = self.edge_ids.get(e) {
+                    let prop = self.result.graph.edge_weight_mut(*id)?;
+                    prop.name.clone_from(name);
+                } else if !idempotent {
+                    return None;
+                }
             }
             Operation::MoveEdgeTarget(e, t) => {
                 let edgeindex = self.edge_ids.get(e)?;

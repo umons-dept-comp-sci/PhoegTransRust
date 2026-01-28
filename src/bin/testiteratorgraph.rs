@@ -15,7 +15,7 @@ use transproof::{
     parsing::PropertyGraphParser,
     property_graph::PropertyGraph,
     transformation::{
-        souffle::{create_program_instance, generate_operation_trees},
+        souffle::{create_program_instance},
         Operation, OperationName, TransformGenerator,
     },
     transformation_automaton::{
