@@ -48,3 +48,6 @@ name = "similarity"
 
 [[bin]]
 name = "datalog2pgschema"
+
+[[bin]]
+name = "misctest"

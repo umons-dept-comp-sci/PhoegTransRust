@@ -69,7 +69,7 @@ fn build() {
         {
             let progname = path
                 .file_stem()
-                .expect("Invalide file.")
+                .expect("Invalid file.")
                 .to_str()
                 .expect("Encoding error.")
                 .to_owned();
@@ -102,6 +102,7 @@ fn build() {
 
     cxx_build::bridges(["src/transformation/souffle/souffle_ffi.rs"])
         .file("cpp_util/souffleUtil.hpp")
+        .file("/usr/local/include/souffle/SouffleInterface.h")
         .files(programs)
         .cpp(true)
         .std("c++17")
