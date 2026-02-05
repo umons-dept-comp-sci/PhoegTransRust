@@ -6,7 +6,7 @@ edition="2018"
 
 [dependencies]
 rayon = "1.0"
-graph = {git = "ssh://git@github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
+graph = {git = "https://github.com/umons-dept-comp-sci/PhoegRustGraph.git"}
 time = "0.3.36"
 docopt = "0.8"
 serde={version="1.0", features=["derive"]}
