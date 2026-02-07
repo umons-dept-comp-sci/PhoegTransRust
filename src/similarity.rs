@@ -84,26 +84,37 @@ pub fn property_graph_minhash(g: &PropertyGraph) -> Vec<String> {
 }
 
 pub fn jaccard_index(g1: &PropertyGraph, g2: &PropertyGraph) -> f64 {
-    let mut isolated = property_graph_features(g1)
+    let mut isolated1 = property_graph_features(g1)
         .into_iter()
         .fold(HashMap::new(), |mut h, s| {
             h.entry(s).and_modify(|v| *v+=1).or_insert(1);
             h
     });
     let mut common = HashMap::new();
+    let mut isolated2 = HashMap::new();
     property_graph_features(g2).into_iter().for_each(|s| {
-        if common.contains_key(&s) {
-            common.entry(s).and_modify(|v| *v+=1);
-        } else if isolated.contains_key(&s) {
-            let num = isolated.remove(&s).unwrap();
-            common.insert(s, num);
+        let num1 = isolated1.get_mut(&s).map(|v| {*v-=1; v});
+        if let Some(num1) = num1 {
+            if *num1 == 0u64 {
+                isolated1.remove(&s);
+            }
+            common.entry(s).and_modify(|v| *v+=1).or_insert(1);
         } else {
-            isolated.insert(s, 1);
+            isolated2.entry(s).and_modify(|v| *v+=1).or_insert(1);
         }
+        // if common.contains_key(&s) {
+        //     common.entry(s).and_modify(|v| *v+=1);
+        // } else if isolated1.contains_key(&s) {
+        //     let num = isolated1.remove(&s).unwrap();
+        //     common.insert(s, num+1);
+        // } else {
+        //     isolated1.insert(s, 1);
+        // }
     });
     let common_num = common.values().sum::<u64>() as f64;
-    let isolated_num = isolated.values().sum::<u64>() as f64;
-    common_num / (isolated_num + common_num)
+    let isolated1_num = isolated1.values().sum::<u64>() as f64;
+    let isolated2_num = isolated2.values().sum::<u64>() as f64;
+    common_num / (isolated1_num + isolated2_num + common_num)
 }
 
 #[cfg(test)]

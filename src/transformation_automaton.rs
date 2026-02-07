@@ -26,6 +26,7 @@ pub struct AutomatonNode {
 pub struct TransformationAutomaton {
     pub start: Vec<NodeIndex>,
     pub node_set: HashMap<(Operation, Option<usize>), HashMap<Operation, NodeIndex>>,
+    pub transfo_ids: HashMap<Option<usize>, String>,
     pub graph: StableGraph<AutomatonNode, Option<Operation>, Directed>,
 }
 
@@ -34,6 +35,7 @@ impl TransformationAutomaton {
         TransformationAutomaton {
             start: Vec::new(),
             node_set: HashMap::new(),
+            transfo_ids: HashMap::new(),
             graph: StableGraph::new(),
         }
     }
@@ -254,6 +256,10 @@ impl TransformGeneratorGraph {
                 false
             } else {
                 let start = self.starts.pop_front().unwrap();
+                let mut g_clone = self.g.clone();
+                let node = &self.automaton.graph[start];
+                g_clone.transfo_id = self.automaton.transfo_ids.get(&node.t_id).cloned();
+                g_clone.root = Some(node.root.clone());
                 // println!("{:?}", self.automaton.graph[start].op);
                 self.list.push_back((start, self.g.clone(), 0));
                 true

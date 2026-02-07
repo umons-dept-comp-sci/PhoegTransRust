@@ -51,3 +51,6 @@ name = "datalog2pgschema"
 
 [[bin]]
 name = "misctest"
+
+[[bin]]
+name = "apply_transfos"

@@ -408,6 +408,7 @@ unsafe fn generate_graph(program: Program) -> Option<TransformationAutomaton> {
                     let name = extract_text(t);
                     name.hash(&mut hasher);
                     t_id = Some(hasher.finish() as usize);
+                    graph.transfo_ids.insert(t_id, name);
                 }
                 let root = Operation::from_record_index(extract_signed(t), record, symbol)?;
                 let prev = Operation::from_record_index(extract_signed(t), record, symbol)?;
