@@ -73,12 +73,12 @@ pub fn property_graph_features(g: &PropertyGraph) -> Vec<String> {
         .collect()
 }
 
-pub fn property_graph_minhash(g: &PropertyGraph) -> Vec<String> {
+pub fn property_graph_minhash(g: &PropertyGraph, sample: usize) -> Vec<String> {
     let features = property_graph_features(g).into_iter().fold(HashMap::new(), |mut map, feature| {
         *map.entry(feature).or_insert(0) += 1;
         map
     });
-    let mut minhash = ProbMinHash3aSha::new(200, "".to_string());
+    let mut minhash = ProbMinHash3aSha::new(sample, "".to_string());
     minhash.hash_weigthed_hashmap(&features);
     minhash.get_signature().to_vec()
 }

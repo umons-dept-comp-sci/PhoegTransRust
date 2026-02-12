@@ -101,9 +101,9 @@ where
                     if !stored.contains(&key) {
                         stored.insert(key);
                         start = Instant::now();
-                        let sim = if *MINHASH.get().unwrap() {
-                            let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g)).unwrap();
-                            let g_hash = property_graph_minhash(&h.result);
+                        let sim = if let Some(sample) = *MINHASH.get().unwrap() {
+                            let target_hash = target_graph.as_ref().map(|g| property_graph_minhash(&g, sample)).unwrap();
+                            let g_hash = property_graph_minhash(&h.result, sample);
                             compute_probminhash_jaccard(&target_hash, &g_hash)
                         } else {
                             jaccard_index(&h.result, target)

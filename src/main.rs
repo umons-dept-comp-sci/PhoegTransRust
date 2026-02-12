@@ -30,7 +30,6 @@ use transproof::{
 
 const MAX_TURNS: usize = 5;
 const MIN_IMPROV: f64 = 0.01;
-const TARGET_SIM: f64 = 1.0;
 
 // (-f <filter>)...
 // -f <filter>            The filters \
@@ -69,8 +68,9 @@ Options:
     -p, --prune <prune>    Number of best results to keep. [default: 6]
     --strat <strategy>     Strategy to use for the computation. Available strategies are: naive, random, weighted_distance and greedy. [default: greedy]
     -w, --weight <weight>  Weight to give to the distance in the weighted distance strategy. Must be between 0 and 1. [default: 0.5]
-    --minshash             Use minhash similarity instead of default jaccard index.
+    --minshash <sample>    Use minhash similarity with the given sample size instead of default jaccard index. [default: 200]
     --idempotent           Operations are idempotent
+    --theta <sim>          Minimum similarity to be considered as a solution. [default: 1.0]
     ";
 
 #[derive(Debug, Deserialize, Clone)]
@@ -91,8 +91,9 @@ struct Args {
     flag_p: Option<usize>,
     flag_strat: String,
     flag_w: f64,
-    flag_minshash: bool,
+    flag_minshash: Option<usize>,
     flag_idempotent: bool,
+    flag_theta: f64
 }
 
 fn main() -> Result<(), TransProofError> {
@@ -301,7 +302,7 @@ fn main() -> Result<(), TransProofError> {
                     previous_sim = Some(best_sim_raw);
                     previous_sig = Some(best_sig_raw);
                 }
-                looping = looping && previous_sim.map(|sim| sim < TARGET_SIM).unwrap_or(true);
+                looping = looping && previous_sim.map(|sim| sim < args.flag_theta).unwrap_or(true);
             } else {
                 println!("No best sig");
                 looping = false;
