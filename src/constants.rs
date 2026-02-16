@@ -16,4 +16,5 @@ lazy_static! {
     pub static ref SIM_TIME: Arc<Mutex<Duration>> = Arc::new(Mutex::new(Duration::default()));
     pub static ref GEN_TIME: Arc<Mutex<Duration>> = Arc::new(Mutex::new(Duration::default()));
     pub static ref AUTOMATON_TIME: Arc<Mutex<Duration>> = Arc::new(Mutex::new(Duration::default()));
+    pub static ref NUM_DUP: Arc<Mutex<i64>> = Arc::new(Mutex::new(0i64));
 }

@@ -8,7 +8,7 @@ use std::{
 
 use neo4rs::{query, Graph, Node, Path, Query, Relation, Txn};
 
-use crate::constants::{AUTOMATON_TIME, GEN_TIME, NEO4J_TIME, SIM_TIME, SOUFFLE_TIME, TOTAL_TIME, PATH_WEIGHT};
+use crate::constants::{AUTOMATON_TIME, GEN_TIME, NEO4J_TIME, NUM_DUP, PATH_WEIGHT, SIM_TIME, SOUFFLE_TIME, TOTAL_TIME};
 use crate::{
     graph_transformation::GraphTransformation,
     property_graph::{Properties, PropertyGraph},
@@ -26,6 +26,7 @@ const KEY_PROP: &str = "key";
 const NAME_PROP: &str = "_name";
 const SIM_PROP: &str = "similarity";
 const DISTANCE_PROP: &str = "distance";
+const TRANSFO_ID_PROP: &str = "transfo_id";
 pub const OPERATIONS_PROP: &str = "operations";
 
 async fn get_or_create_metanode(
@@ -95,7 +96,10 @@ return created, n.{distance} as distance;
     .param("key", key as i64);
     let mut data = conn.execute(query).await.unwrap();
     let row = data.next(conn.handle()).await.unwrap().unwrap();
-    let created = row.get("created").unwrap();
+    let created: bool = row.get("created").unwrap();
+    if !created {
+        *NUM_DUP.lock().unwrap() += 1;
+    }
     let distance = row.get("distance").ok();
     (created, distance)
 }
@@ -206,15 +210,19 @@ async fn write_property_graph(
     (key, distance)
 }
 
-fn build_meta_edge_query() -> String {
+fn build_meta_edge_query(transfo_id: Option<String>) -> String {
+    let id_param = transfo_id.map(|id_text|
+        format!(", {}: \"{}\"", TRANSFO_ID_PROP, id_text)
+    ).unwrap_or_else(String::new);
     let start = format!(
         "
 MATCH (n1: {meta} {{{key}:$first_key}}), (n2: {meta} {{{key}:$second_key}})
-CREATE (n1) -[:{meta} {{{ops}:$operations}}]-> (n2);
+CREATE (n1) -[:{meta} {{{ops}:$operations{id_text}}}]-> (n2);
 ",
         key = KEY_PROP,
         meta = META_LABEL,
-        ops = OPERATIONS_PROP
+        ops = OPERATIONS_PROP,
+        id_text = id_param,
     );
     start.to_string()
 }
@@ -232,7 +240,8 @@ pub async fn write_graph_transformation(
     let second = &gt.result;
     dist.iter_mut().for_each(|v| *v += 1);
     let (second_key, _) = write_property_graph(second, true, false, sim, dist, conn).await;
-    let query = query(&build_meta_edge_query())
+    let q = build_meta_edge_query(gt.transfo_id.clone());
+    let query = query(&build_meta_edge_query(gt.transfo_id.clone()))
         .param("first_key", first_key as i64)
         .param("second_key", second_key as i64)
         .param("operations", gt.operations.clone());
@@ -505,6 +514,9 @@ pub fn compute_paths(source_label: &str, target_label: &str, operations_name: &s
 }
 
 async fn save_timings_async(neograph: &Graph) {
+    let num_dup: i64 = {
+        *NUM_DUP.lock().unwrap()
+    };
     let query = query(
         "
 CREATE (n:TIMINGS {
@@ -513,7 +525,8 @@ CREATE (n:TIMINGS {
     neo4j_time: $neo4j_time,
     sim_time: $sim_time,
     gen_time: $gen_time,
-    automaton_time: $automaton_time
+    automaton_time: $automaton_time,
+    num_dup: $num_dup
 });",
     )
     .param("total_time", TOTAL_TIME.lock().unwrap().as_secs_f64())
@@ -524,6 +537,10 @@ CREATE (n:TIMINGS {
     .param(
         "automaton_time",
         AUTOMATON_TIME.lock().unwrap().as_secs_f64(),
+    )
+    .param(
+        "num_dup",
+        num_dup,
     );
     neograph.run(query).await.unwrap();
 }
